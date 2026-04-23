@@ -1,4 +1,4 @@
-# ZClub - Coffee (ESP32-S3)
+# ZClub - Coffee V2 (ESP32-S3)
 
 一个基于 **ESP-IDF 5.5.x** 的嵌入式开源项目，包含：
 - LCD + 触控 + LVGL UI
