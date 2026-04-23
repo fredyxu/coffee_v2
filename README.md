@@ -118,4 +118,3 @@ input/sys -> con -> state -> cmd -> ui/audio actor
   先看日志是否有 `con/ui_actor/state` 的事件链路输出，再确认 `CMD_UI_*` 是否有对应处理。
 
 ---
-
