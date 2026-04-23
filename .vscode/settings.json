@@ -1,0 +1,20 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "idf.espIdfPath": "/Users/Fredy/esp/v5.5.4/esp-idf",
+  "idf.pythonInstallPath": "/usr/local/bin/python",
+  "idf.openOcdConfigs": [
+    "board/esp32s3-builtin.cfg"
+  ],
+  "idf.port": "/dev/tty.wchusbserial5B901815151",
+  "idf.toolsPath": "/Users/Fredy/.espressif",
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32s3"
+  },
+  "clangd.path": "/Users/Fredy/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clangd",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=**",
+    "--compile-commands-dir=/Users/Fredy/code/ZClub/coffee/build"
+],
+"idf.flashType": "UART"
+}

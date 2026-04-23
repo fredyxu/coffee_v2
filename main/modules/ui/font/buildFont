@@ -1,0 +1,63 @@
+#!/bin/bash
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+FONT_SRC="$ROOT/font/font.otf"
+CHARS_FILE="$ROOT/font/chars.txt"
+OUT_DIR="$ROOT/font"
+
+if [ ! -f "$FONT_SRC" ]; then
+  echo "font file not found: $FONT_SRC" >&2
+  exit 1
+fi
+
+if [ ! -f "$CHARS_FILE" ]; then
+  echo "chars file not found: $CHARS_FILE" >&2
+  exit 1
+fi
+
+if [ $# -eq 0 ]; then
+  TAGS=(12 14 16)
+else
+  TAGS=("$@")
+fi
+
+SYMBOLS=$(tr -d '\n' < "$CHARS_FILE")
+
+cleanup_font() {
+  local path="$1"
+  python - <<PY
+from pathlib import Path
+
+p = Path("$path")
+text = p.read_text()
+text = text.replace('#include "lvgl/lvgl.h"', '#include "lvgl.h"')
+header_start = text.find("/*******************************************************************************")
+if header_start != -1:
+    header_end = text.find("******************************************************************************/", header_start)
+    if header_end != -1:
+        header_end += len("******************************************************************************/")
+        text = text[header_end:].lstrip("\n")
+p.write_text(text)
+PY
+}
+
+for SIZE in "${TAGS[@]}"; do
+  OUT="$OUT_DIR/font_${SIZE}.c"
+  echo "building font size $SIZE -> $OUT"
+  lv_font_conv \
+    --font "$FONT_SRC" \
+    --size "$SIZE" \
+    --bpp 4 \
+    --format lvgl \
+    --symbols "$SYMBOLS" \
+    --range 0x20-0x7F \
+    --no-compress \
+    --output "$OUT"
+  if [ $? -ne 0 ]; then
+    echo "lv_font_conv failed for size $SIZE" >&2
+    exit 1
+  fi
+  cleanup_font "$OUT"
+done
+
+echo "font build complete"
