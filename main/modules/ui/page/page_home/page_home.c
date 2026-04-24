@@ -3,6 +3,7 @@
 
 #include "ui/theme/color.h"
 #include "ui/theme/font.h"
+#include "ui/page/components/components_top_status/component_top_status.h"
 
 #include "config/config_sys.h"
 #include "core/utils/log.h"
@@ -70,8 +71,10 @@ esp_err_t page_home_show(lv_obj_t *p) {
     lv_obj_set_style_bg_color(p, UI_COLOR_BG, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(p, LV_OPA_COVER, LV_PART_MAIN);
 
-    create_auto_scroll_view(p);
-    add_home_msg("[HOME] PAGE READY");
+	ui_add_top_status(p);
+
+    // create_auto_scroll_view(p);
+    // add_home_msg("[HOME] PAGE READY");
 
 
     return ESP_OK;
