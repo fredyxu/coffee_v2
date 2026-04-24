@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "${ROOT_DIR}"
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+msg="$(date '+%Y-%m-%d %H:%M:%S')"
+
+git add -A
+
+if ! git diff --cached --quiet; then
+  git commit -m "${msg}"
+else
+  echo "[sync] no staged changes to commit"
+fi
+
+if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
+  git push
+else
+  git push -u origin "${branch}"
+fi
+
+echo "[sync] done on branch ${branch}"

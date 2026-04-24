@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SIM_DIR="${ROOT_DIR}/simulator"
+BUILD_DIR="${SIM_DIR}/build"
+BIN="${BUILD_DIR}/coffee_sim"
+
+cmake -S "${SIM_DIR}" -B "${BUILD_DIR}"
+cmake --build "${BUILD_DIR}" -j 8
+"${BIN}"
+

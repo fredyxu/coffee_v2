@@ -44,7 +44,7 @@ esp_err_t page_show(page_id_t page_id)
 
     case PAGE_HOME:
         LOG("切换到页面: HOME");
-        // view_home_show(screen);
+        view_home_show(screen);
         // add_bottom_navigation(screen);
         break;
     case PAGE_MENU:
@@ -72,13 +72,14 @@ static void ui_create(void *arg)
     // lv_obj_t *label = lv_label_create(scr);
     // lv_label_set_text(label, "Hello LVGL");
     // lv_obj_center(label);
-	page_show(PAGE_INIT);
+	// page_show(PAGE_INIT);
+	page_show(PAGE_HOME);
 }
 
 esp_err_t ui_init(void)
 {
     lvgl_port_run(ui_create, NULL);
-	
+
 	esp_err_t err = ui_actor_init();
 	if(err != ESP_OK) {
 		LOG("UI actor init error");
