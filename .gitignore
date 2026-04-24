@@ -50,9 +50,9 @@ CTestTestfile.cmake
 
 # 模拟器
 simulator/
-sim
-sim-watch
-sync
+/sim
+/sim-watch
+/sync
 
 # Python environment files
 *.pyc
