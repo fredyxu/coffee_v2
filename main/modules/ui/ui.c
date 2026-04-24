@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "ui/page/page_init/page_init.h"
+#include "ui/page/page_home/page_home.h"
 
 #include "lvgl.h"
 #include "core/utils/log.h"
@@ -38,14 +39,11 @@ esp_err_t page_show(page_id_t page_id)
 
     switch(page_id) {
     case PAGE_INIT:
-        LOG("切换到页面: INIT");
         page_init_show(screen);
         break;
 
     case PAGE_HOME:
-        LOG("切换到页面: HOME");
-        view_home_show(screen);
-        // add_bottom_navigation(screen);
+        page_home_show(screen);
         break;
     case PAGE_MENU:
         // view_menu_show(screen);
@@ -87,4 +85,3 @@ esp_err_t ui_init(void)
 	}
     return ESP_OK;
 }
-

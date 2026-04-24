@@ -17,7 +17,10 @@ add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../managed_components/lvgl__lvgl"
 add_executable(coffee_sim
     src/main.c
     src/app_sim.c
+    src/sim_shim.c
+    ../main/modules/ui/ui.c
     ../main/modules/ui/page/page_init/page_init.c
+    ../main/modules/ui/page/page_home/page_home.c
     ../main/modules/ui/font/font_14.c
 )
 

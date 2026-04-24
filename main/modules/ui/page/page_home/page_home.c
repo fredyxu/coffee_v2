@@ -9,10 +9,7 @@
 
 static lv_obj_t * s;
 
-/**
- * 向滚动栏添加一行文字，并自动滚动到底部
- */
-esp_err_t add_init_msg(const char * txt) {
+static esp_err_t add_home_msg(const char * txt) {
     if(s == NULL || txt == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
@@ -63,7 +60,7 @@ static void create_auto_scroll_view(lv_obj_t *p) {
     lv_obj_set_scrollbar_mode(s, LV_SCROLLBAR_MODE_AUTO);
 }
 
-esp_err_t page_init_show(lv_obj_t *p) {
+esp_err_t page_home_show(lv_obj_t *p) {
 	// LOG("初始化页面显示");
     if(p == NULL) {
         return ESP_ERR_INVALID_ARG;
@@ -73,12 +70,8 @@ esp_err_t page_init_show(lv_obj_t *p) {
     lv_obj_set_style_bg_color(p, UI_COLOR_BG, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(p, LV_OPA_COVER, LV_PART_MAIN);
 
-    // create_auto_scroll_view(p);
-
-	s = lv_obj_create(p);
-
-	lv_obj_set_size(s, 20, 20);
-	lv_obj_set_style_bg_color(s, UI_COLOR_BG_SECONDARY, 0);
+    create_auto_scroll_view(p);
+    add_home_msg("[HOME] PAGE READY");
 
 
     return ESP_OK;

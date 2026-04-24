@@ -48,6 +48,12 @@ cmake_install.cmake
 install_manifest.txt
 CTestTestfile.cmake
 
+# 模拟器
+simulator/
+sim
+sim-watch
+sync
+
 # Python environment files
 *.pyc
 *.pyo

@@ -6,6 +6,8 @@ SIM_DIR="${ROOT_DIR}/simulator"
 BUILD_DIR="${SIM_DIR}/build"
 BIN="${BUILD_DIR}/coffee_sim"
 
+: "${SIM_DISPLAY_INDEX:=1}"
+
 SIM_PID=""
 
 WATCH_TARGETS=(
@@ -35,9 +37,9 @@ build_and_run() {
     wait "${SIM_PID}" 2>/dev/null || true
   fi
 
-  "${BIN}" &
+  SIM_DISPLAY_INDEX="${SIM_DISPLAY_INDEX}" "${BIN}" &
   SIM_PID=$!
-  echo "[sim-watch] simulator running, pid=${SIM_PID}"
+  echo "[sim-watch] simulator running, pid=${SIM_PID}, display=${SIM_DISPLAY_INDEX}"
 }
 
 snapshot() {
@@ -79,4 +81,3 @@ while true; do
     build_and_run
   fi
 done
-
