@@ -107,16 +107,84 @@ input/sys -> con -> state -> cmd -> ui/audio actor
 | 供电 | 5V 电源/USB 供电 | 1 | 满足主控 + 屏幕 + 音频峰值电流 |
 | 连接 | 杜邦线/焊接导线/排针 | 若干 | 连接各模块 |
 
-## 7. 默认关键引脚（节选）
+## 7. 详细引脚接线表
 
-以 `main/config/config_pin.h` 为准，下面仅列常用：
+以 `main/config/config_pin.h` 为准。下表为当前代码默认接线。
 
-- LCD: `DC=9, WR=8, CS=10, RST=21, BL=11, D0..D7=4,5,6,7,12,13,14,15`
-- Touch(I2C): `SDA=18, SCL=47, INT=17, RST=16`
-- Encoder: `A=38, B=39, SW=40`
-- Key: `KEY1=1, KEY2=2`
-- Speaker(I2S): `BCLK=41, WS=42, DOUT=19`
-- Mic(I2S): `BCLK=35, WS=36, DIN=37`
+### 7.1 摩尔斯双键（DIT / DAH）
+
+| ESP32-S3 GPIO | 外设引脚/端子 | 方向 | 说明 |
+|---|---|---|---|
+| GPIO1 | KEY1 (DIT) | 输入 | 接法：`GPIO -> 按键 -> GND`，使用内部上拉 |
+| GPIO2 | KEY2 (DAH) | 输入 | 接法：`GPIO -> 按键 -> GND`，使用内部上拉 |
+
+### 7.2 LCD（I80 并口，8-bit）
+
+| ESP32-S3 GPIO | LCD 引脚 | 方向 | 说明 |
+|---|---|---|---|
+| GPIO9 | DC | 输出 | 数据/命令选择 |
+| GPIO8 | WR | 输出 | 写时钟 |
+| GPIO10 | CS | 输出 | 片选 |
+| GPIO21 | RST | 输出 | 硬复位 |
+| GPIO11 | BL | 输出 | 背光控制 |
+| GPIO4 | D0 | 输出 | 数据总线 bit0 |
+| GPIO5 | D1 | 输出 | 数据总线 bit1 |
+| GPIO6 | D2 | 输出 | 数据总线 bit2 |
+| GPIO7 | D3 | 输出 | 数据总线 bit3 |
+| GPIO12 | D4 | 输出 | 数据总线 bit4 |
+| GPIO13 | D5 | 输出 | 数据总线 bit5 |
+| GPIO14 | D6 | 输出 | 数据总线 bit6 |
+| GPIO15 | D7 | 输出 | 数据总线 bit7 |
+
+### 7.3 触控 FT6336U（I2C）
+
+| ESP32-S3 GPIO | 触控引脚 | 方向 | 说明 |
+|---|---|---|---|
+| GPIO18 | SDA | 双向 | I2C 数据线 |
+| GPIO47 | SCL | 输出 | I2C 时钟线 |
+| GPIO17 | INT | 输入 | 触控中断输入 |
+| GPIO16 | RST | 输出 | 触控复位 |
+
+### 7.4 EC11 旋转编码器
+
+| ESP32-S3 GPIO | 编码器引脚 | 方向 | 说明 |
+|---|---|---|---|
+| GPIO38 | A | 输入 | 旋转 A 相 |
+| GPIO39 | B | 输入 | 旋转 B 相 |
+| GPIO40 | SW | 输入 | 按键输入 |
+| GND | C/COM | - | 编码器公共端接地 |
+
+### 7.5 MAX98357A（I2S 音频输出）
+
+| ESP32-S3 GPIO | MAX98357A 引脚 | 方向 | 说明 |
+|---|---|---|---|
+| GPIO41 | BCLK | 输出 | I2S 位时钟 |
+| GPIO42 | LRC / WS | 输出 | I2S 声道时钟 |
+| GPIO19 | DIN | 输出 | I2S 数据输出到功放 |
+| 5V / 3V3 | VIN | - | 模块供电（按模块规格） |
+| GND | GND | - | 电源地 |
+
+### 7.6 INMP441（I2S 麦克风输入）
+
+| ESP32-S3 GPIO | INMP441 引脚 | 方向 | 说明 |
+|---|---|---|---|
+| GPIO35 | SCK / BCLK | 输出 | I2S 位时钟 |
+| GPIO36 | WS | 输出 | I2S 声道时钟 |
+| GPIO37 | SD | 输入 | I2S 数据输入（麦克风输出） |
+| GND | L/R | - | 建议接 GND（左声道） |
+| 3V3 | VDD | - | 模块供电 |
+| GND | GND | - | 电源地 |
+
+### 7.7 预留引脚（当前未启用）
+
+| 名称 | 配置值 | 说明 |
+|---|---:|---|
+| `PIN_AUDIO_PA_EN` | -1 | 功放使能引脚预留 |
+| `PIN_SD_MOSI` | -1 | SD 卡 SPI 预留 |
+| `PIN_SD_MISO` | -1 | SD 卡 SPI 预留 |
+| `PIN_SD_CLK` | -1 | SD 卡 SPI 预留 |
+| `PIN_SD_CS` | -1 | SD 卡 SPI 预留 |
+| `PIN_STATUS_LED` | -1 | 状态灯预留 |
 
 ## 8. 常见问题
 
