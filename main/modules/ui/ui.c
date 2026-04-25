@@ -85,3 +85,25 @@ esp_err_t ui_init(void)
 	}
     return ESP_OK;
 }
+
+
+
+
+esp_err_t ui_page_init(lv_obj_t *p, lv_obj_t **s) {
+    if(p == NULL || s == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+	lv_obj_clean(p);
+	*s = lv_obj_create(p);
+	lv_obj_set_size(*s, DISPLAY_H_RES, DISPLAY_V_RES);
+	lv_obj_set_flex_flow(*s, LV_FLEX_FLOW_COLUMN);
+	lv_obj_set_style_border_width(*s, 0, LV_STATE_DEFAULT);
+	lv_obj_set_style_outline_width(*s, 0, LV_STATE_DEFAULT);
+	lv_obj_set_style_shadow_width(*s, 0, LV_STATE_DEFAULT);
+	lv_obj_remove_flag(*s, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_set_style_radius(*s, 0, LV_STATE_DEFAULT);
+	lv_obj_set_style_pad_all(*s, 0, LV_STATE_DEFAULT);
+	lv_obj_set_style_margin_all(*s, 0, LV_STATE_DEFAULT);
+
+    return ESP_OK;
+}

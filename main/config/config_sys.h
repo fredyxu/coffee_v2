@@ -10,3 +10,4 @@
 #include "config/config_sys_display.h"
 #include "config/config_sys_audio.h"
 #include "config/config_sys_task.h"
+#include "config/config_ui.h"

@@ -17,4 +17,6 @@ esp_err_t ui_init(void);
 
 esp_err_t page_show(page_id_t page_id);
 
+// 初始化页面
+esp_err_t ui_page_init(lv_obj_t *p, lv_obj_t **s);
 

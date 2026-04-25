@@ -4,12 +4,110 @@
 #include "esp_err.h"
 #include "config/config_sys.h"
 #include "ui/theme/color.h"
+#include "ui/theme/font.h"
+#include <stdbool.h>
+
+#define ICON_HEIGHT 20
+#define STATUS_SIZE 5
 
 static lv_obj_t *status_body;
+static lv_obj_t *obj_status_body;
+static lv_obj_t *obj_icon_body;
 
-esp_err_t ui_add_top_status(lv_obj_t *p) {
-	status_body = lv_obj_crete(p);
-	lv_obj_set_style_size(status_body, DISPLAY_H_RES, 20, 0);
+static lv_obj_t *obj_icon_wifi;
+static lv_obj_t *obj_icon_link;
+static lv_obj_t *obj_icon_bt;
+static lv_obj_t *obj_status;
+
+static lv_style_t style_body;
+static lv_style_t style_icon;
+static bool style_inited = false;
+
+static void init_style(void)
+{
+    if(style_inited) {
+        return;
+    }
+    lv_style_init(&style_body);
+    lv_style_set_bg_opa(&style_body, LV_OPA_TRANSP);
+    lv_style_set_border_width(&style_body, 0);
+    lv_style_set_pad_all(&style_body, 0);
+
+
+	lv_style_init(&style_icon);
+	lv_style_set_flex_flow(&style_icon, LV_FLEX_FLOW_ROW);
+	lv_style_set_flex_main_place(&style_icon, LV_FLEX_ALIGN_CENTER);
+	lv_style_set_flex_cross_place(&style_icon, LV_FLEX_ALIGN_CENTER);
+	lv_style_set_flex_track_place(&style_icon, LV_FLEX_ALIGN_CENTER);
+	lv_style_set_pad_left(&style_icon, 1);
+	lv_style_set_text_font(&style_icon, UI_FONT_14);
+    lv_style_set_text_color(&style_icon, UI_COLOR_ACCENT);
+	lv_style_set_size(&style_icon, ICON_HEIGHT, ICON_HEIGHT);
+
+	
+    style_inited = true;
+}
+
+
+esp_err_t ui_add_top_status(lv_obj_t *p)
+{
+    if(p == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+	init_style();
+
+	status_body = lv_obj_create(p);
+    lv_obj_set_size(status_body, DISPLAY_H_RES, UI_TOP_STATUS_HEIGHT);
+    lv_obj_align(status_body, LV_ALIGN_TOP_MID, 0, 0);
 	lv_obj_set_style_bg_color(status_body, UI_COLOR_BG_SECONDARY, 0);
+
+    lv_obj_set_style_bg_opa(status_body, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(status_body, 0, 0);
+    lv_obj_set_style_radius(status_body, 0, 0);
+    lv_obj_set_style_pad_all(status_body, 4, 0);
+	lv_obj_set_style_clip_corner(status_body, false, 0);
+	// 禁止出现滚动条
+	lv_obj_remove_flag(status_body, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_set_flex_flow(status_body, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(status_body, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+	obj_status_body = lv_obj_create(status_body);
+	lv_obj_add_style(obj_status_body, &style_body, 0);
+	lv_obj_set_size(obj_status_body, LV_PCT(50), ICON_HEIGHT);
+	lv_obj_set_flex_flow(obj_status_body, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(obj_status_body,
+						  LV_FLEX_ALIGN_START,
+						  LV_FLEX_ALIGN_CENTER,
+						  LV_FLEX_ALIGN_CENTER);
+
+	obj_icon_body = lv_obj_create(status_body);
+	lv_obj_add_style(obj_icon_body, &style_body, 0);
+	lv_obj_set_style_pad_right(obj_icon_body, 5, 0);
+	lv_obj_set_size(obj_icon_body, LV_PCT(50), ICON_HEIGHT);
+	lv_obj_set_flex_flow(obj_icon_body, LV_FLEX_FLOW_ROW);
+	lv_obj_set_flex_align(obj_icon_body, 
+							LV_FLEX_ALIGN_END, 
+							LV_FLEX_ALIGN_CENTER, 
+							LV_FLEX_ALIGN_CENTER);
+
+
+
+    obj_icon_wifi = lv_label_create(obj_icon_body);
+	lv_obj_add_style(obj_icon_wifi, &style_icon, 0);
+    lv_label_set_text(obj_icon_wifi, ICON_WIFI_FULL);
+
+	obj_icon_link = lv_label_create(obj_icon_body);
+	lv_obj_add_style(obj_icon_link, &style_icon, 0);
+	lv_label_set_text(obj_icon_link, ICON_LINK);
+
+	obj_status = lv_label_create(obj_status_body);
+	lv_obj_set_style_pad_left(obj_status, 5, 0);
+	lv_label_set_text(obj_status, "●");
+	lv_obj_set_style_text_font(obj_status, UI_FONT_12, 0);
+	lv_obj_set_style_text_color(obj_status, UI_COLOR_ACCENT, 0);
+
+    
+
 	return ESP_OK;
 }

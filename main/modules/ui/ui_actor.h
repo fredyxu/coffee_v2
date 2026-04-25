@@ -8,6 +8,7 @@ extern "C" {
 
 esp_err_t ui_actor_init(void);
 
+
 #ifdef __cplusplus
 }
 #endif

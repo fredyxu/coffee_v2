@@ -19,3 +19,6 @@
 
 /* 颜色反相：1=反色, 0=正常 */
 #define CONFIG_LCD_INVERT_COLOR 1
+
+
+
