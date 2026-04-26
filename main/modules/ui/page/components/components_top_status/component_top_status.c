@@ -23,6 +23,10 @@ static lv_style_t style_body;
 static lv_style_t style_icon;
 static bool style_inited = false;
 
+void ui_top_status_ref_icon() {
+	
+}
+
 static void init_style(void)
 {
     if(style_inited) {

@@ -7,6 +7,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "core/state/state_map.h"
+#include "core/state/status.h"
 #include "core/utils/log.h"
 
 /**
@@ -67,6 +68,14 @@ esp_err_t state_init(void)
     }
 
     s_state.scene = STATE_SCENE_INIT;
+
+    esp_err_t err = status_init();
+    if(err != ESP_OK) {
+        vSemaphoreDelete(s_state.lock);
+        s_state.lock = NULL;
+        return err;
+    }
+
     s_state.inited = true;
     return ESP_OK;
 }
@@ -217,6 +226,7 @@ esp_err_t state_handle_sys(const msg_t *sys_msg,
 
     *out_count = 0;
     const state_scene_t current_scene = state_get_scene();
+    (void)status_apply_sys_msg(sys_msg);
 
     switch(sys_msg->event) {
         case MSG_EVT_SYS_APP_INIT_INFO:
@@ -235,6 +245,12 @@ esp_err_t state_handle_sys(const msg_t *sys_msg,
             return state_emit_ui_text_cmd(sys_msg, "[WIFI] DISCONNECTED", out_msgs, out_cap, out_count);
         case MSG_EVT_SYS_WIFI_SIGNAL_WEAK:
             return state_emit_ui_text_cmd(sys_msg, "[WIFI] SIGNAL WEAK", out_msgs, out_cap, out_count);
+        case MSG_EVT_SYS_WS_CONNECTED:
+            return state_emit_ui_text_cmd(sys_msg, "[WS] CONNECTED", out_msgs, out_cap, out_count);
+        case MSG_EVT_SYS_WS_DISCONNECTED:
+            return state_emit_ui_text_cmd(sys_msg, "[WS] DISCONNECTED", out_msgs, out_cap, out_count);
+        case MSG_EVT_SYS_WS_HEARTBEAT_LOST:
+            return state_emit_ui_text_cmd(sys_msg, "[WS] HEARTBEAT LOST", out_msgs, out_cap, out_count);
         default:
             return ESP_ERR_NOT_FOUND;
     }

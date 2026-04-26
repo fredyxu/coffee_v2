@@ -8,6 +8,8 @@
 #include "modules/input/encoder/encoder_actor.h"
 #include "modules/audio/audio_actor.h"
 #include "modules/mic/mic_actor.h"
+#include "modules/store/store_actor.h"
+#include "modules/wifi/wifi_actor.h"
 #include "modules/display/lcd_i80_8.h"
 #include "modules/ui/adapter/lvgl_port.h"
 #include "modules/ui/ui.h"
@@ -64,6 +66,22 @@ esp_err_t app_startup(void) {
 		return err;
 	}
 	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "UI初始化完成.", 0);
+
+	// 初始化Store Actor
+	err = store_actor_init();
+	if(err != ESP_OK) {
+		LOG("APP_INIT: store actor init failed");
+		return err;
+	}
+	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "Store初始化完成.", 0);
+
+	// 初始化WiFi Actor
+	err = wifi_actor_init();
+	if(err != ESP_OK) {
+		LOG("APP_INIT: wifi actor init failed");
+		return err;
+	}
+	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "WiFi初始化完成.", 0);
 
 	// 初始化旋转编码器
 	err = encoder_actor_init();

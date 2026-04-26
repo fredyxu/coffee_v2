@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 esp_err_t ui_add_top_status(lv_obj_t *p);
+void ui_top_status_ref_icon();
 
 #ifdef __cplusplus
 }
