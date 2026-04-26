@@ -8,11 +8,8 @@
 ## 0. 项目进度
 
 已完成：
-- [x] 核心消息链路：`input/sys -> con -> state -> cmd -> actor`
-- [x] 启动阶段初始化页面（`page_init`）与初始化日志追加
-- [x] `MSG_TYPE_INPUT` / `MSG_TYPE_SYS` 分离处理
-- [x] UI Actor 已接入，支持状态转 UI 命令执行
-- [x] 本地桌面模拟器（SDL2 + LVGL）可编译运行
+- [x] 核心消息链路
+- [x] 启动阶段初始化页面
 - [x] 本地存储模块
 - [x] WIFI模块
 
