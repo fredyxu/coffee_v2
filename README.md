@@ -1,11 +1,9 @@
 # ZClub - Coffee V2 (ESP32-S3)
 
-一个基于 **ESP-IDF 5.5.x** 的嵌入式开源项目，包含：
-- LCD + 触控 + LVGL UI
-- 旋转编码器输入
-- 音频输出（MAX98357A, I2S）
-- 麦克风输入（INMP441, I2S）
-- 基于消息总线的 `INPUT / SYS / CMD` 架构
+一个基于 **ESP-IDF 5.5.x** 的嵌入式开源项目
+
+此项目为Coffee项目的再次重启，使用的硬件有所调整。增加了麦克风，计划扩展网络对讲功能。
+
 
 ## 0. 项目进度
 
@@ -15,6 +13,9 @@
 - [x] `MSG_TYPE_INPUT` / `MSG_TYPE_SYS` 分离处理
 - [x] UI Actor 已接入，支持状态转 UI 命令执行
 - [x] 本地桌面模拟器（SDL2 + LVGL）可编译运行
+- [x] 本地存储模块
+- [x] WIFI模块
+
 
 计划中：
 - [ ] Home 页面功能完善与状态联动
@@ -62,7 +63,13 @@ main/
   core/           con / state / msg 等核心模块
   modules/        ui / input / audio / mic / display
   config/         引脚与系统参数
+doc/              项目文档与每日更新日志
 ```
+
+### 3.1 文档入口
+
+- 文档目录：[doc/README.md](doc/README.md)
+- 每日更新日志：[doc/daily/2026-04-26.md](doc/daily/2026-04-26.md)
 
 ## 4. 消息架构（简版）
 
