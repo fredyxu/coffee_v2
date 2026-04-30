@@ -30,12 +30,27 @@ typedef struct {
     QueueHandle_t cmd_q;
     TaskHandle_t task;
     bool weak_reported;
+    int last_signal_level;
     int weak_rssi_threshold;
 } wifi_actor_ctx_t;
 
 static wifi_actor_ctx_t s_actor = {0};
 
 static const TickType_t WIFI_ACTOR_LOOP_TICKS = pdMS_TO_TICKS(500);
+
+static int wifi_actor_calc_signal_level(int rssi, int weak_threshold)
+{
+    if(rssi <= weak_threshold) {
+        return 1;
+    }
+    if(rssi <= weak_threshold + 8) {
+        return 2;
+    }
+    if(rssi <= weak_threshold + 15) {
+        return 3;
+    }
+    return 4;
+}
 
 static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
 {
@@ -113,6 +128,7 @@ static void wifi_actor_poll_signal_quality(void)
     int rssi = 0;
     if(!wifi_module_is_connected()) {
         s_actor.weak_reported = false;
+        s_actor.last_signal_level = 0;
         return;
     }
 
@@ -120,7 +136,13 @@ static void wifi_actor_poll_signal_quality(void)
         return;
     }
 
-    if(rssi <= s_actor.weak_rssi_threshold) {
+    const int level = wifi_actor_calc_signal_level(rssi, s_actor.weak_rssi_threshold);
+    if(level != s_actor.last_signal_level) {
+        s_actor.last_signal_level = level;
+        (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SIGNAL_LEVEL, level, 0);
+    }
+
+    if(level == 1) {
         if(!s_actor.weak_reported) {
             s_actor.weak_reported = true;
             (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SIGNAL_WEAK, rssi, 0);
@@ -188,6 +210,7 @@ esp_err_t wifi_actor_init(void)
     }
 
     s_actor.weak_reported = false;
+    s_actor.last_signal_level = 0;
     s_actor.weak_rssi_threshold = cfg.weak_rssi_threshold;
 
     BaseType_t ok = xTaskCreatePinnedToCore(
@@ -229,6 +252,7 @@ esp_err_t wifi_actor_deinit(void)
     }
 
     s_actor.weak_reported = false;
+    s_actor.last_signal_level = 0;
     return wifi_module_deinit();
 }
 

@@ -3,6 +3,7 @@
 #include "lvgl.h"
 #include "esp_err.h"
 #include "config/config_sys.h"
+#include "core/state/status.h"
 #include "ui/theme/color.h"
 #include "ui/theme/font.h"
 #include <stdbool.h>
@@ -23,8 +24,27 @@ static lv_style_t style_body;
 static lv_style_t style_icon;
 static bool style_inited = false;
 
-void ui_top_status_ref_icon() {
-	
+void ui_top_status_ref_icon(void) {
+    if(obj_icon_wifi == NULL || obj_icon_link == NULL) {
+        return;
+    }
+
+    status_current_t cur = {0};
+    if(status_get_current(&cur) != ESP_OK) {
+        return;
+    }
+
+    if(!cur.wifi_connected || cur.wifi_level <= 1) {
+        lv_label_set_text(obj_icon_wifi, ICON_WIFI_1);
+    } else if(cur.wifi_level == 2) {
+        lv_label_set_text(obj_icon_wifi, ICON_WIFI_2);
+    } else if(cur.wifi_level == 3) {
+        lv_label_set_text(obj_icon_wifi, ICON_WIFI_3);
+    } else {
+        lv_label_set_text(obj_icon_wifi, ICON_WIFI_FULL);
+    }
+
+    lv_obj_set_style_text_opa(obj_icon_link, cur.ws_connected ? LV_OPA_100 : LV_OPA_40, 0);
 }
 
 static void init_style(void)
@@ -48,6 +68,9 @@ static void init_style(void)
     lv_style_set_text_color(&style_icon, UI_COLOR_ACCENT);
 	lv_style_set_size(&style_icon, ICON_HEIGHT, ICON_HEIGHT);
 
+	lv_style_set_bg_color(&style_icon, UI_COLOR_TEXT_1);
+	// lv_style_set_margin_top(&style_icon, 2);
+	lv_style_set_pad_top(&style_icon, 2);
 	
     style_inited = true;
 }
@@ -98,8 +121,10 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 
 
     obj_icon_wifi = lv_label_create(obj_icon_body);
+	// lv_obj_set_style_bg_color(obj_icon_wifi, UI_COLOR_WARN, 0);
+	// lv_obj_set_style_opa(obj_icon_wifi, 0, 0);
 	lv_obj_add_style(obj_icon_wifi, &style_icon, 0);
-    lv_label_set_text(obj_icon_wifi, ICON_WIFI_FULL);
+    lv_label_set_text(obj_icon_wifi, ICON_WIFI_NO);
 
 	obj_icon_link = lv_label_create(obj_icon_body);
 	lv_obj_add_style(obj_icon_link, &style_icon, 0);
@@ -112,6 +137,7 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 	lv_obj_set_style_text_color(obj_status, UI_COLOR_ACCENT, 0);
 
     
+	// ui_top_status_ref_icon();
 
 	return ESP_OK;
 }

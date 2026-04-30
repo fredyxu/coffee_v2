@@ -13,7 +13,16 @@
 #include <string.h>
 #include <stdint.h>
 #include "esp_err.h"
+
+#if defined(__has_include)
+#if __has_include("freertos/FreeRTOS.h")
 #include "freertos/FreeRTOS.h"
+#else
+typedef uint32_t TickType_t;
+#endif
+#else
+#include "freertos/FreeRTOS.h"
+#endif
 
 typedef enum {
 	MSG_SRC_ENCODER,
@@ -59,6 +68,7 @@ typedef enum {
 	MSG_EVT_SYS_WIFI_CONNECTED,
 	MSG_EVT_SYS_WIFI_DISCONNECTED,
 	MSG_EVT_SYS_WIFI_SIGNAL_WEAK,
+	MSG_EVT_SYS_WIFI_SIGNAL_LEVEL,
 	MSG_EVT_SYS_WS_CONNECTED,
 	MSG_EVT_SYS_WS_DISCONNECTED,
 	MSG_EVT_SYS_WS_HEARTBEAT_LOST,

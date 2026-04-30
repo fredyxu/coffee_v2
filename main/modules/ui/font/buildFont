@@ -118,9 +118,8 @@ def parse_charset_tokens(charset_text: str):
                 continue
     return cps
 
-def parse_code_from_font(path: Path):
+def scan_font_codepoints(path: Path):
     # Use fontconfig tool to inspect glyph charset.
-    # Prefer Private Use Area codepoints (common for icon fonts).
     try:
         out = subprocess.check_output(
             ["fc-scan", "--format", "%{charset}\\n", str(path)],
@@ -128,43 +127,177 @@ def parse_code_from_font(path: Path):
             stderr=subprocess.DEVNULL,
         )
     except Exception:
-        return None
+        return []
     cps = parse_charset_tokens(out.strip())
+    return sorted(set(cps))
+
+def parse_code_from_font(path: Path):
+    cps = scan_font_codepoints(path)
     if not cps:
-        return None
+        return None, []
     pua = [cp for cp in cps if 0xE000 <= cp <= 0xF8FF]
-    if pua:
-        return min(pua)
-    non_ascii = [cp for cp in cps if cp > 0x7F]
-    if non_ascii:
-        return min(non_ascii)
-    return None
+    return cps, pua
 
 mapping = {}
 file_to_code = {}
 errors = []
+used_codes = set()
+code_owner = {}
+macro_candidates = {}
 
 for f in font_files:
     macro = normalize_name(f.stem)
 
+    cps, pua = parse_code_from_font(f)
+    non_ascii = [cp for cp in cps if cp > 0x7F]
+    candidates = []
+    # Prefer PUA codepoints, then other non-ASCII codepoints.
+    for cp in pua + non_ascii:
+        if cp not in candidates:
+            candidates.append(cp)
+    macro_candidates[macro] = candidates
+
     code = None
-    if macro in existing:
-        code = existing[macro]
+
+    # 1) Explicit sidecar file has highest priority.
     if code is None:
         code = parse_code_file(f)
+
+    # 2) Explicit suffix in filename (e.g. _uE001 / _0xE001).
     if code is None:
         code = parse_code_from_stem(f.stem)
+
+    # 3) Existing map entry, but validate it against current font charset.
+    if code is None and macro in existing:
+        mapped = existing[macro]
+        if not cps:
+            code = mapped
+        elif mapped in cps:
+            code = mapped
+        elif len(pua) == 1:
+            code = pua[0]
+            print(
+                f"[buildFont] WARN: {macro} mapped to 0x{mapped:04X} but font has no such glyph; "
+                f"auto-correct to 0x{code:04X}",
+                file=sys.stderr,
+            )
+        else:
+            errors.append(
+                f"invalid mapping for {f.name}: {macro}=0x{mapped:04X} not found in font glyph set"
+            )
+            continue
+
+    # 4) Auto-detect only when unambiguous.
     if code is None:
-        code = parse_code_from_font(f)
+        if len(pua) == 1:
+            code = pua[0]
+        else:
+            code = None
 
     if code is None:
+        if len(pua) > 1:
+            sample = " ".join(f"0x{cp:04X}" for cp in pua[:8])
+            errors.append(
+                f"ambiguous unicode for {f.name}; multiple PUA codepoints found ({sample}). "
+                f"please add {f.with_suffix('.code').name} or rename with suffix _uE001/_0xE001"
+            )
+            continue
         errors.append(
             f"missing unicode for {f.name}; add {f.with_suffix('.code').name} or rename with suffix _uE001/_0xE001"
         )
         continue
 
+    # Final validation and auto-correction:
+    # If selected codepoint is invalid, try to auto-pick from the font's real codepoints.
+    if cps and code not in cps:
+        replacement = None
+        # Prefer unoccupied PUA codepoints first.
+        for cand in pua:
+            if cand not in used_codes:
+                replacement = cand
+                break
+        # Fallback to any unoccupied non-ASCII codepoint.
+        if replacement is None:
+            for cand in non_ascii:
+                if cand not in used_codes:
+                    replacement = cand
+                    break
+        # Last fallback: single PUA/single codepoint even if occupied.
+        if replacement is None and len(pua) == 1:
+            replacement = pua[0]
+        if replacement is None and len(non_ascii) == 1:
+            replacement = non_ascii[0]
+
+        if replacement is not None:
+            print(
+                f"[buildFont] WARN: {macro} selected 0x{code:04X} not in {f.name}; "
+                f"auto-correct to 0x{replacement:04X}",
+                file=sys.stderr,
+            )
+            code = replacement
+        else:
+            sample_all = " ".join(f"0x{cp:04X}" for cp in cps[:12])
+            errors.append(
+                f"codepoint mismatch for {f.name}: selected 0x{code:04X} not in font charset "
+                f"(available: {sample_all})"
+            )
+            continue
+
+    # Avoid collisions when possible (same codepoint used by different macros).
+    if code in used_codes:
+        replacement = None
+        for cand in pua:
+            if cand not in used_codes:
+                replacement = cand
+                break
+        if replacement is None:
+            for cand in non_ascii:
+                if cand not in used_codes:
+                    replacement = cand
+                    break
+        if replacement is not None:
+            print(
+                f"[buildFont] WARN: {macro} codepoint 0x{code:04X} already used; "
+                f"auto-reassign to 0x{replacement:04X}",
+                file=sys.stderr,
+            )
+            code = replacement
+        else:
+            # Try to move the owner icon to one of its alternatives first.
+            owner = code_owner.get(code)
+            moved = False
+            if owner is not None:
+                for owner_alt in macro_candidates.get(owner, []):
+                    if owner_alt == code or owner_alt in used_codes:
+                        continue
+                    print(
+                        f"[buildFont] WARN: resolve collision by moving {owner} "
+                        f"0x{code:04X} -> 0x{owner_alt:04X}",
+                        file=sys.stderr,
+                    )
+                    mapping[owner] = owner_alt
+                    used_codes.remove(code)
+                    used_codes.add(owner_alt)
+                    del code_owner[code]
+                    code_owner[owner_alt] = owner
+                    moved = True
+                    break
+
+            if moved:
+                # old codepoint is now free for current icon
+                pass
+            else:
+                owner_text = f", occupied by {owner}" if owner else ""
+                errors.append(
+                    f"codepoint collision for {f.name}: {macro}=0x{code:04X}{owner_text}; "
+                    "no alternative glyph codepoint available to auto-resolve"
+                )
+                continue
+
     mapping[macro] = code
     file_to_code[str(f.resolve())] = code
+    used_codes.add(code)
+    code_owner[code] = macro
 
 if errors:
     for e in errors:
