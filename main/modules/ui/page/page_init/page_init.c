@@ -47,7 +47,6 @@ static void create_auto_scroll_view(lv_obj_t *p) {
     // 设置背景颜色
     lv_obj_set_style_bg_color(log_container, UI_COLOR_BG, 0);
     lv_obj_set_style_bg_opa(log_container, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(log_container, UI_COLOR_TEXT_1, 0);
     lv_obj_set_style_border_width(log_container, 0, 0);
     lv_obj_set_style_radius(log_container, 0, 0);
 
@@ -64,7 +63,6 @@ static void create_auto_scroll_view(lv_obj_t *p) {
 }
 
 esp_err_t page_init_show(lv_obj_t *p) {
-	// LOG("初始化页面显示");
     if(p == NULL) {
         return ESP_ERR_INVALID_ARG;
     }

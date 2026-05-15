@@ -1,20 +1,46 @@
 {
-  "C_Cpp.intelliSenseEngine": "default",
-  "idf.espIdfPath": "/Users/Fredy/esp/v5.5.4/esp-idf",
-  "idf.pythonInstallPath": "/usr/local/bin/python",
-  "idf.openOcdConfigs": [
-    "board/esp32s3-builtin.cfg"
-  ],
-  "idf.port": "/dev/tty.wchusbserial5B901815151",
-  "idf.toolsPath": "/Users/Fredy/.espressif",
-  "idf.customExtraVars": {
-    "IDF_TARGET": "esp32s3"
-  },
-  "clangd.path": "/Users/Fredy/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clangd",
-  "clangd.arguments": [
-    "--background-index",
-    "--query-driver=**",
-    "--compile-commands-dir=/Users/Fredy/code/ZClub/coffee/build"
-],
-"idf.flashType": "UART"
+	"C_Cpp.intelliSenseEngine": "disabled",
+	"C_Cpp.errorSquiggles": "disabled",
+	"idf.espIdfPath": "/Users/Fredy/esp/v5.5.4/esp-idf",
+	"idf.pythonInstallPath": "/usr/local/bin/python",
+	"idf.openOcdConfigs": [
+		"board/esp32s3-builtin.cfg"
+	],
+	"idf.port": "/dev/tty.wchusbserial5B901815151",
+	"idf.toolsPath": "/Users/Fredy/.espressif",
+	"idf.customExtraVars": {
+		"IDF_TARGET": "esp32s3"
+	},
+	"clangd.path": "/Users/Fredy/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clangd",
+	"clangd.arguments": [
+		"--background-index",
+		"--query-driver=/Users/Fredy/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20260121/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc",
+		"--compile-commands-dir=/Users/Fredy/code/ZClub/coffee/build",
+		// "--header-insertion=iwyu",
+		"--header-insertion=never"
+	],
+	"idf.flashType": "UART",
+	"editor.formatOnSave": true,
+	"editor.semanticHighlighting.enabled": true,
+	"C_Cpp.enhancedColorization": "enabled",
+	"C_Cpp.formatting": "disabled",
+	"C_Cpp.clang_format_path": "/Users/Fredy/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clang-format",
+	"clang-format.executable": "/Users/Fredy/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clang-format",
+	"[c]": {
+		"editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+		"editor.formatOnSave": false
+	},
+	"[cpp]": {
+		"editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+		"editor.formatOnSave": false
+	},
+	"[objective-c]": {
+		"editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+		"editor.formatOnSave": false
+	},
+	"editor.codeActionsOnSave": {
+		"source.fixAll": "never",
+		"source.organizeImports": "never",
+		"source.addMissingImports": "never"
+	}
 }

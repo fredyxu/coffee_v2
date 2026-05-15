@@ -7,8 +7,8 @@
 #define TOUCH_I2C_FREQ_HZ 400000
 
 /* 聚合子配置 */
-#include "config/config_sys_display.h"
-#include "config/config_sys_audio.h"
-#include "config/config_sys_task.h"
-#include "config/config_sys_wifi.h"
-#include "config/config_ui.h"
+#include "config/config_sys_display.h"	// IWYU pragma: export
+#include "config/config_sys_audio.h"	// IWYU pragma: export
+#include "config/config_sys_task.h"		// IWYU pragma: export
+#include "config/config_sys_wifi.h"		// IWYU pragma: export
+#include "config/config_ui.h"			// IWYU pragma: export

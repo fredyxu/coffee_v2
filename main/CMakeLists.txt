@@ -1,5 +1,6 @@
-file(GLOB SRC_FILES 
+file(GLOB SRC_FILES
 		"*.c" 
+		"config/*.c"
 		"app/*.c"
 		"core/*/*.c"
 		"core/*/*/*.c"
@@ -9,11 +10,15 @@ file(GLOB SRC_FILES
 		"moudels/touch/*.c"
 		"modules/ui/page/*/*.c"
 		"modules/ui/page/*/*/*.c"
+		"modules/ui/page/*/*/*/*.c"
 		"modules/ui/font/*.c"
 		"modules/ui/adapter/*.c"
 		"tests/*.c"
 		"tests/*/*.c"
 )
+
+list(APPEND SRC_FILES "core/msg/msg_sub.c")
+list(REMOVE_DUPLICATES SRC_FILES)
 
 idf_component_register(
 	SRCS ${SRC_FILES}

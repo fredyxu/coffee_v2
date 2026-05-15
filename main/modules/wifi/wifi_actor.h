@@ -26,6 +26,7 @@ esp_err_t wifi_actor_start(TickType_t timeout_ticks);
 esp_err_t wifi_actor_stop(TickType_t timeout_ticks);
 esp_err_t wifi_actor_connect(TickType_t timeout_ticks);
 esp_err_t wifi_actor_disconnect(TickType_t timeout_ticks);
+esp_err_t wifi_actor_scan(TickType_t timeout_ticks);
 
 esp_err_t wifi_actor_set_credentials(const char *ssid, const char *password, TickType_t timeout_ticks);
 

@@ -7,10 +7,12 @@
 #include "esp_lcd_panel_io.h"
 
 typedef enum {
-    PAGE_INIT,
+    PAGE_INIT = 0,
     PAGE_HOME,
     PAGE_MENU,
     PAGE_SETTINGS,
+	PAGE_SETTINGS_ITEM,
+	PAGE_NONE,
 } page_id_t;
 
 esp_err_t ui_init(void);

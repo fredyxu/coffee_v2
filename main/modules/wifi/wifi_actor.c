@@ -17,6 +17,7 @@ typedef enum {
     WIFI_ACTOR_CMD_STOP,
     WIFI_ACTOR_CMD_CONNECT,
     WIFI_ACTOR_CMD_DISCONNECT,
+    WIFI_ACTOR_CMD_SCAN,
     WIFI_ACTOR_CMD_SET_CREDENTIALS,
 } wifi_actor_cmd_type_t;
 
@@ -64,6 +65,19 @@ static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
             break;
         case WIFI_MOD_EVT_STA_DISCONNECTED:
             (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_DISCONNECTED, event->reason, 0);
+            break;
+        case WIFI_MOD_EVT_SCAN_AP_FOUND:
+            (void)msg_send_sys_text(
+				MSG_SRC_WIFI, 
+				MSG_EVT_SYS_WIFI_SCAN_AP_FOUND, 
+				event->ssid, 
+				0);
+            break;
+        case WIFI_MOD_EVT_SCAN_DONE:
+            (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_DONE, event->ap_count, 0);
+            break;
+        case WIFI_MOD_EVT_SCAN_FAILED:
+            (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_FAILED, event->reason, 0);
             break;
         default:
             break;
@@ -115,6 +129,13 @@ static void wifi_actor_apply_cmd(const wifi_actor_cmd_t *cmd)
         case WIFI_ACTOR_CMD_DISCONNECT:
             (void)wifi_module_disconnect();
             break;
+        case WIFI_ACTOR_CMD_SCAN: {
+            esp_err_t err = wifi_module_scan();
+            if(err != ESP_OK) {
+                (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_FAILED, (int)err, 0);
+            }
+            break;
+        }
         case WIFI_ACTOR_CMD_SET_CREDENTIALS:
             (void)wifi_module_set_credentials(cmd->ssid, cmd->password);
             break;
@@ -284,6 +305,14 @@ esp_err_t wifi_actor_disconnect(TickType_t timeout_ticks)
 {
     wifi_actor_cmd_t cmd = {
         .type = WIFI_ACTOR_CMD_DISCONNECT,
+    };
+    return wifi_actor_post_cmd(&cmd, timeout_ticks);
+}
+
+esp_err_t wifi_actor_scan(TickType_t timeout_ticks)
+{
+    wifi_actor_cmd_t cmd = {
+        .type = WIFI_ACTOR_CMD_SCAN,
     };
     return wifi_actor_post_cmd(&cmd, timeout_ticks);
 }

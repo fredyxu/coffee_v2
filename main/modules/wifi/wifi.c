@@ -11,6 +11,8 @@
 #define WIFI_AUTH_WPA2_PSK WIFI_AUTH_WPA_PSK
 #endif
 
+#define WIFI_MODULE_SCAN_MAX_APS 20
+
 typedef struct {
     bool ready;
     bool started;
@@ -26,7 +28,12 @@ typedef struct {
 
 static wifi_ctx_t s_wifi = {0};
 
-static void wifi_emit_event(wifi_module_event_id_t id, int reason, int rssi, uint32_t ip)
+static void wifi_emit_event_full(wifi_module_event_id_t id,
+                                 int reason,
+                                 int rssi,
+                                 uint32_t ip,
+                                 uint16_t ap_count,
+                                 const char *ssid)
 {
     if(s_wifi.cb == NULL) {
         return;
@@ -37,8 +44,56 @@ static void wifi_emit_event(wifi_module_event_id_t id, int reason, int rssi, uin
         .reason = reason,
         .rssi = rssi,
         .ip = ip,
+        .ap_count = ap_count,
     };
+    if(ssid != NULL) {
+        strncpy(evt.ssid, ssid, sizeof(evt.ssid) - 1);
+        evt.ssid[sizeof(evt.ssid) - 1] = '\0';
+    }
     s_wifi.cb(&evt, s_wifi.cb_user);
+}
+
+static void wifi_emit_event(wifi_module_event_id_t id, int reason, int rssi, uint32_t ip)
+{
+    wifi_emit_event_full(id, reason, rssi, ip, 0, NULL);
+}
+
+static void wifi_handle_scan_done(const wifi_event_sta_scan_done_t *scan_done)
+{
+    if(scan_done == NULL || scan_done->status != 0) {
+        wifi_emit_event_full(WIFI_MOD_EVT_SCAN_FAILED, scan_done != NULL ? (int)scan_done->status : -1, 0, 0, 0, NULL);
+        return;
+    }
+
+    uint16_t ap_count = 0;
+    esp_err_t err = esp_wifi_scan_get_ap_num(&ap_count);
+    if(err != ESP_OK) {
+        wifi_emit_event_full(WIFI_MOD_EVT_SCAN_FAILED, (int)err, 0, 0, 0, NULL);
+        return;
+    }
+
+    wifi_ap_record_t records[WIFI_MODULE_SCAN_MAX_APS] = {0};
+    uint16_t record_count = ap_count;
+    if(record_count > WIFI_MODULE_SCAN_MAX_APS) {
+        record_count = WIFI_MODULE_SCAN_MAX_APS;
+    }
+
+    if(record_count > 0) {
+        err = esp_wifi_scan_get_ap_records(&record_count, records);
+        if(err != ESP_OK) {
+            wifi_emit_event_full(WIFI_MOD_EVT_SCAN_FAILED, (int)err, 0, 0, 0, NULL);
+            return;
+        }
+    }
+
+    for(uint16_t i = 0; i < record_count; i++) {
+        if(records[i].ssid[0] == '\0') {
+            continue;
+        }
+        wifi_emit_event_full(WIFI_MOD_EVT_SCAN_AP_FOUND, 0, records[i].rssi, 0, ap_count, (const char *)records[i].ssid);
+    }
+
+    wifi_emit_event_full(WIFI_MOD_EVT_SCAN_DONE, 0, 0, 0, ap_count, NULL);
 }
 
 static esp_err_t wifi_apply_sta_config(void)
@@ -60,6 +115,11 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     (void)arg;
 
     if(event_base == WIFI_EVENT) {
+        if(event_id == WIFI_EVENT_SCAN_DONE) {
+            wifi_handle_scan_done((const wifi_event_sta_scan_done_t *)event_data);
+            return;
+        }
+
         if(event_id == WIFI_EVENT_STA_START) {
             s_wifi.started = true;
             wifi_emit_event(WIFI_MOD_EVT_STA_START, 0, 0, 0);
@@ -288,6 +348,23 @@ esp_err_t wifi_module_disconnect(void)
     }
 
     return esp_wifi_disconnect();
+}
+
+esp_err_t wifi_module_scan(void)
+{
+    if(!s_wifi.ready || !s_wifi.started) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    wifi_scan_config_t scan_cfg = {
+        .ssid = NULL,
+        .bssid = NULL,
+        .channel = 0,
+        .show_hidden = false,
+        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+    };
+
+    return esp_wifi_scan_start(&scan_cfg, false);
 }
 
 bool wifi_module_is_ready(void)

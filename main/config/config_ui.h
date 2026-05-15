@@ -1,3 +1,5 @@
 #pragma once
 
-#define UI_TOP_STATUS_HEIGHT 24
+#define CONFIG_UI_TOP_STATUS_HEIGHT 20
+#define CONFIG_UI_RADIUS 5
+#define CONFIG_UI_MARGIN 5

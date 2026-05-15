@@ -5,6 +5,7 @@
 #include "config/config_sys.h"
 #include "core/state/state.h"
 #include "core/state/state_types.h"
+#include "core/msg/msg_sub.h"
 #include "core/utils/log.h"
 
 #define CON_INPUT_Q_LEN 32
@@ -77,6 +78,7 @@ static void con_task(void *arg)
             if(xQueueReceive(g_con.input_q, &input_msg, 0) != pdTRUE) {
                 continue;
             }
+            (void)msg_pub_subs(&input_msg, 0);
 
             size_t out_count = 0;
             esp_err_t err = state_handle_input(&input_msg, out_cmds, STATE_MAX_OUTPUT_CMDS, &out_count);
@@ -95,6 +97,7 @@ static void con_task(void *arg)
             if(xQueueReceive(g_con.sys_q, &sys_msg, 0) != pdTRUE) {
                 continue;
             }
+            (void)msg_pub_subs(&sys_msg, 0);
 
             size_t out_count = 0;
             esp_err_t err = state_handle_sys(&sys_msg, out_cmds, STATE_MAX_OUTPUT_CMDS, &out_count);
