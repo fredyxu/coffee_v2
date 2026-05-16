@@ -189,16 +189,4 @@ input/sys -> con -> state -> cmd -> ui/audio actor
 | `PIN_SD_CS` | -1 | SD 卡 SPI 预留 |
 | `PIN_STATUS_LED` | -1 | 状态灯预留 |
 
-## 8. 常见问题
-
-- 编译后新增文件未生效  
-  执行：
-  ```bash
-  idf.py fullclean build
-  ```
-  （当前工程使用 `file(GLOB ...)`，新增源文件后建议 fullclean 一次）
-
-- 启动后 UI 没变化  
-  先看日志是否有 `con/ui_actor/state` 的事件链路输出，再确认 `CMD_UI_*` 是否有对应处理。
-
 ---
