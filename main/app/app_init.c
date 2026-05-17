@@ -1,7 +1,6 @@
 #include "app_init.h"
 #include "core/utils/log.h"
 #include "esp_err.h"
-#include "core/con/con.h"
 #include "core/msg/msg.h"
 #include "core/state/state.h"
 #include "modules/input/touch/touch.h"
@@ -19,14 +18,8 @@
 
 
 esp_err_t app_startup(void) {
-	esp_err_t err = con_init();
-	if(err != ESP_OK) {
-		LOG("APP_INIT: con actor init failed");
-		return err;
-	}
-
 	// 初始化state
-	err = state_init();
+	esp_err_t err = state_init();
 	if(err != ESP_OK) {
 		LOG("STATE INIT FAILED");
 		return err;

@@ -45,7 +45,7 @@ esp_err_t state_set_scene(state_scene_t scene);
 /**
  * @brief 处理单条输入消息，生成 0~N 条命令消息。
  *
- * 典型用法：由 con_task 调用。
+ * 典型用法：由订阅对应输入主题的 actor 调用。
  * - input: 原始输入消息（例如编码器、按键）
  * - out_msgs: 输出命令数组
  * - out_cap: out_msgs 的容量（msg_t 个数）
@@ -68,7 +68,7 @@ esp_err_t state_handle_input(const msg_t *input,
 /**
  * @brief 处理单条系统消息，生成 0~N 条命令消息。
  *
- * 典型用法：由 con_task 在接收到 MSG_TYPE_SYS 后调用。
+ * 典型用法：由订阅对应系统事件主题的 actor 调用。
  * - sys_msg: 系统消息（如 INIT_DONE/WIFI 状态）
  * - out_msgs: 输出命令数组
  * - out_cap: out_msgs 的容量（msg_t 个数）

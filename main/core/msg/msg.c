@@ -2,16 +2,16 @@
 
 #include <stdio.h>
 #include "freertos/task.h"
-#include "core/con/con.h"
+#include "core/msg/msg_sub.h"
 
-/* 直接转发 INPUT 消息到 con 的 input 队列。 */
+/* 发布 INPUT 消息到订阅中心。 */
 esp_err_t msg_send_input(const msg_t *msg, TickType_t timeout_ticks)
 {
     if(msg == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-	return con_post_input(msg, timeout_ticks);
+	return msg_publish_auto(msg, timeout_ticks);
 }
 
 /* 构造 INPUT+value 的常用消息，自动填充当前 tick。 */
@@ -33,14 +33,14 @@ esp_err_t msg_send_status_change(msg_src_t src,
     return msg_send_input_value(src, EVENT_STATUS_CHANGE, scene_value, timeout_ticks);
 }
 
-/* 直接转发 SYS 消息到 con 的 sys 队列。 */
+/* 发布 SYS 消息到订阅中心。 */
 esp_err_t msg_send_sys(const msg_t *msg, TickType_t timeout_ticks)
 {
     if(msg == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    return con_post_sys(msg, timeout_ticks);
+    return msg_publish_auto(msg, timeout_ticks);
 }
 
 /* 构造 SYS+value 的常用消息，自动填充当前 tick。 */

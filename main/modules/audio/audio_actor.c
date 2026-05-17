@@ -6,7 +6,6 @@
 #include "freertos/task.h"
 #include "config/config_pin.h"
 #include "config/config_sys.h"
-#include "core/con/con.h"
 #include "core/msg/msg.h"
 #include "core/utils/log.h"
 #include "modules/audio/audio.h"
@@ -54,49 +53,14 @@ static esp_err_t audio_actor_post_cmd(const audio_actor_cmd_t *cmd, TickType_t t
     return (xQueueSend(s_actor.cmd_q, cmd, timeout_ticks) == pdTRUE) ? ESP_OK : ESP_ERR_TIMEOUT;
 }
 
-static void audio_actor_apply_con_cmd(const msg_t *msg)
-{
-    if(msg == NULL || msg->type != MSG_TYPE_CMD) {
-        return;
-    }
-
-    audio_actor_cmd_t cmd = {0};
-    switch(msg->event) {
-        case CMD_AUDIO_TONE:
-            cmd.type = AUDIO_ACTOR_CMD_TONE;
-            cmd.data.tone.freq_hz = (uint32_t)msg->data.tone.freq;
-            cmd.data.tone.duration_ms = (uint32_t)msg->data.tone.duration;
-            (void)audio_actor_post_cmd(&cmd, 0);
-            break;
-        case CMD_AUDIO_STOP:
-            cmd.type = AUDIO_ACTOR_CMD_STOP;
-            (void)audio_actor_post_cmd(&cmd, 0);
-            break;
-        case CMD_AUDIO_VOLUME_STEP: {
-            int vol = (int)audio_get_volume() + msg->data.value * 5;
-            if(vol < 0) vol = 0;
-            if(vol > 100) vol = 100;
-            (void)audio_set_volume((uint8_t)vol);
-            break;
-        }
-        default:
-            break;
-    }
-}
-
 static void audio_actor_task(void *arg)
 {
     (void)arg;
 
-    msg_t con_msg;
     audio_actor_cmd_t cmd;
     audio_stream_chunk_t chunk;
 
     while(1) {
-        while(con_recv_audio_cmd(&con_msg, 0) == ESP_OK) {
-            audio_actor_apply_con_cmd(&con_msg);
-        }
-
         if(s_actor.stream_mode) {
             if(xQueueReceive(s_actor.stream_q, &chunk, pdMS_TO_TICKS(20)) == pdTRUE) {
                 if(chunk.sample_rate != 0 && chunk.sample_rate != audio_get_sample_rate()) {

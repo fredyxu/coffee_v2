@@ -9,7 +9,6 @@
 #include "freertos/task.h"
 #include "config/config_pin.h"
 #include "config/config_sys.h"
-#include "core/con/con.h"
 #include "core/msg/msg.h"
 #include "core/utils/log.h"
 #include "modules/input/encoder/encoder.h"
@@ -43,7 +42,7 @@ static void IRAM_ATTR encoder_gpio_isr(void *arg)
 static void encoder_post_input_event(msg_event_t event)
 {
     msg_t msg = msg_make(MSG_SRC_ENCODER, MSG_TYPE_INPUT, event, (uint32_t)xTaskGetTickCount());
-    (void)con_post_input(&msg, 0);
+    (void)msg_send_input(&msg, 0);
 }
 
 static void encoder_process_ab(void)

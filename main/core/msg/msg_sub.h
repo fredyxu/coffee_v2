@@ -13,30 +13,23 @@ extern "C" {
 
 typedef uint32_t msg_sub_handle_t;
 
-/**
- * @brief Subscribe a queue to exact messages matching (type, event).
- *
- * Matching msg_t values are copied into the subscriber queue. The dispatcher
- * does not call callbacks, so subscribers process messages in their own task
- * context.
- */
-esp_err_t msg_sub_queue(msg_type_t type,
-                        msg_event_t event,
-                        QueueHandle_t queue,
-                        msg_sub_handle_t *out_handle);
+typedef enum {
+    MSG_TOPIC_ENCODER_INPUT = 0,
+    MSG_TOPIC_KEY_INPUT,
+    MSG_TOPIC_SETTINGS_STORE,
+    MSG_TOPIC_WIFI_EVENT,
+    MSG_TOPIC_WEBSOCKET_EVENT,
+    MSG_TOPIC_MIC_INPUT,
+    MSG_TOPIC_COUNT,
+} msg_topic_t;
 
-/**
- * @brief Cancel a previous queue subscription.
- */
+esp_err_t msg_sub_queue(msg_topic_t topic, QueueHandle_t queue, msg_sub_handle_t *out_handle);
+
 esp_err_t msg_unsub(msg_sub_handle_t handle);
 
-/**
- * @brief Publish one message to all matching queue subscribers.
- *
- * Intended for core/con dispatch code. Normal modules should keep using
- * msg_send_input/msg_send_sys helpers so messages still pass through con.
- */
-esp_err_t msg_pub_subs(const msg_t *msg, TickType_t timeout_ticks);
+esp_err_t msg_publish(msg_topic_t topic, const msg_t *msg, TickType_t timeout_ticks);
+
+esp_err_t msg_publish_auto(const msg_t *msg, TickType_t timeout_ticks);
 
 #ifdef __cplusplus
 }

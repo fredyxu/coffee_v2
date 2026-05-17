@@ -14,22 +14,23 @@
 - [x] WIFI模块
 
 
-下一步计划：
-- [ ] 首页
+
+计划：
+- [ ] UI
+- [ ] 
 
 ## 1. 功能概览
 
-- 设备启动初始化（LCD、触控、LVGL、输入/音频模块）
-- `state` 统一做输入和系统事件决策
-- `con` 负责消息汇聚与命令分发
-- `ui_actor` / `audio_actor` 负责执行命令
+- 摩尔斯电相关训练练习
+- 网络联通
+- 网络对讲
 
 ## 2. 快速开始
 
 ### 2.1 环境要求
 
 - ESP-IDF `>= 5.5.4`
-- Python 环境可正常执行 `idf.py`
+- LVGL `>= 9.5`
 
 ### 2.2 编译
 
@@ -67,17 +68,8 @@ doc/              项目文档与每日更新日志
 - 文档目录：[doc/README.md](doc/README.md)
 - 每日更新日志：[doc/daily/2026-04-26.md](doc/daily/2026-04-26.md)
 
-## 4. 消息架构（简版）
 
-- `MSG_TYPE_INPUT`：用户输入事件（按键、编码器等）
-- `MSG_TYPE_SYS`：系统事件（初始化完成、WiFi 状态等）
-- `MSG_TYPE_CMD`：决策层输出给 actor 的执行命令
 
-典型链路：
-
-```text
-input/sys -> con -> state -> cmd -> ui/audio actor
-```
 
 ## 5. 引脚配置位置
 
