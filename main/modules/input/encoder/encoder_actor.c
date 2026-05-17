@@ -64,10 +64,10 @@ static void encoder_process_ab(void)
 
     if(s_ctx.acc >= 4) {
         s_ctx.acc = 0;
-        encoder_post_input_event(EVENT_ENCODER_CW);
+        encoder_post_input_event(MSG_EVT_INPUT_ENCODER_CW);
     } else if(s_ctx.acc <= -4) {
         s_ctx.acc = 0;
-        encoder_post_input_event(EVENT_ENCODER_CCW);
+        encoder_post_input_event(MSG_EVT_INPUT_ENCODER_CCW);
     }
 }
 
@@ -82,7 +82,7 @@ static void encoder_process_sw(void)
 
     if(encoder_read_sw() == 0) {
         s_ctx.last_sw_tick = now;
-        encoder_post_input_event(EVENT_ENCODER_PRESS);
+        encoder_post_input_event(MSG_EVT_INPUT_ENCODER_PRESS);
     }
 }
 

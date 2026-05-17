@@ -13,47 +13,47 @@
 /* 便捷宏：减少静态路由表样板代码。 */
 #define ROUTE_CMD_NONE(_evt) { .cmd_event = (_evt), .payload_type = STATE_PAYLOAD_NONE }
 #define ROUTE_CMD_VALUE(_evt, _v) { .cmd_event = (_evt), .payload_type = STATE_PAYLOAD_VALUE, .data.value = (_v) }
-#define ROUTE_CMD_TONE(_freq, _dur) { .cmd_event = CMD_AUDIO_TONE, .payload_type = STATE_PAYLOAD_TONE, .data.tone = { .freq = (_freq), .duration = (_dur) } }
-#define ROUTE_CMD_TEXT(_txt) { .cmd_event = CMD_UI_UPDATE_TEXT, .payload_type = STATE_PAYLOAD_TEXT, .data.text = { .text = (_txt) } }
+#define ROUTE_CMD_TONE(_freq, _dur) { .cmd_event = MSG_EVT_CMD_AUDIO_TONE, .payload_type = STATE_PAYLOAD_TONE, .data.tone = { .freq = (_freq), .duration = (_dur) } }
+#define ROUTE_CMD_TEXT(_txt) { .cmd_event = MSG_EVT_CMD_UI_UPDATE_TEXT, .payload_type = STATE_PAYLOAD_TEXT, .data.text = { .text = (_txt) } }
 
 /* 路由静态常量表。state_handle_input 会线性匹配本表。 */
 static const state_route_t s_routes[] = {
     // HOME: 编码器用于音量调节
     {
         .scene = STATE_SCENE_HOME,
-        .input_event = EVENT_ENCODER_CW,
+        .input_event = MSG_EVT_INPUT_ENCODER_CW,
         .cmd_count = 1,
-        .cmds = { ROUTE_CMD_VALUE(CMD_AUDIO_VOLUME_STEP, +1) },
+        .cmds = { ROUTE_CMD_VALUE(MSG_EVT_CMD_AUDIO_VOLUME_STEP, +1) },
     },
     {
         .scene = STATE_SCENE_HOME,
-        .input_event = EVENT_ENCODER_CCW,
+        .input_event = MSG_EVT_INPUT_ENCODER_CCW,
         .cmd_count = 1,
-        .cmds = { ROUTE_CMD_VALUE(CMD_AUDIO_VOLUME_STEP, -1) },
+        .cmds = { ROUTE_CMD_VALUE(MSG_EVT_CMD_AUDIO_VOLUME_STEP, -1) },
     },
     {
         .scene = STATE_SCENE_HOME,
-        .input_event = EVENT_ENCODER_PRESS,
+        .input_event = MSG_EVT_INPUT_ENCODER_PRESS,
         .cmd_count = 1,
-        .cmds = { ROUTE_CMD_NONE(CMD_AUDIO_STOP) },
+        .cmds = { ROUTE_CMD_NONE(MSG_EVT_CMD_AUDIO_STOP) },
     },
 
     // SETTINGS: 编码器用于菜单移动
     {
         .scene = STATE_SCENE_SETTINGS,
-        .input_event = EVENT_ENCODER_CW,
+        .input_event = MSG_EVT_INPUT_ENCODER_CW,
         .cmd_count = 1,
-        .cmds = { ROUTE_CMD_VALUE(CMD_UI_NAV_STEP, +1) },
+        .cmds = { ROUTE_CMD_VALUE(MSG_EVT_CMD_UI_NAV_STEP, +1) },
     },
     {
         .scene = STATE_SCENE_SETTINGS,
-        .input_event = EVENT_ENCODER_CCW,
+        .input_event = MSG_EVT_INPUT_ENCODER_CCW,
         .cmd_count = 1,
-        .cmds = { ROUTE_CMD_VALUE(CMD_UI_NAV_STEP, -1) },
+        .cmds = { ROUTE_CMD_VALUE(MSG_EVT_CMD_UI_NAV_STEP, -1) },
     },
     {
         .scene = STATE_SCENE_SETTINGS,
-        .input_event = EVENT_ENCODER_PRESS,
+        .input_event = MSG_EVT_INPUT_ENCODER_PRESS,
         .cmd_count = 1,
         .cmds = { ROUTE_CMD_TEXT("[SET] ENTER") },
     },
@@ -61,37 +61,37 @@ static const state_route_t s_routes[] = {
     // 电键：全场景共用
     {
         .scene = STATE_SCENE_HOME,
-        .input_event = EVENT_KEY_DI,
+        .input_event = MSG_EVT_INPUT_KEY_DI,
         .cmd_count = 2,
         .cmds = { ROUTE_CMD_TONE(800, 100), ROUTE_CMD_TEXT(".") },
     },
     {
         .scene = STATE_SCENE_HOME,
-        .input_event = EVENT_KEY_DA,
+        .input_event = MSG_EVT_INPUT_KEY_DA,
         .cmd_count = 2,
         .cmds = { ROUTE_CMD_TONE(800, 300), ROUTE_CMD_TEXT("-") },
     },
     {
         .scene = STATE_SCENE_SETTINGS,
-        .input_event = EVENT_KEY_DI,
+        .input_event = MSG_EVT_INPUT_KEY_DI,
         .cmd_count = 2,
         .cmds = { ROUTE_CMD_TONE(800, 100), ROUTE_CMD_TEXT(".") },
     },
     {
         .scene = STATE_SCENE_SETTINGS,
-        .input_event = EVENT_KEY_DA,
+        .input_event = MSG_EVT_INPUT_KEY_DA,
         .cmd_count = 2,
         .cmds = { ROUTE_CMD_TONE(800, 300), ROUTE_CMD_TEXT("-") },
     },
     // {
     //     .scene = STATE_SCENE_EDIT,
-    //     .input_event = EVENT_KEY_DI,
+    //     .input_event = MSG_EVT_INPUT_KEY_DI,
     //     .cmd_count = 2,
     //     .cmds = { ROUTE_CMD_TONE(800, 100), ROUTE_CMD_TEXT(".") },
     // },
     // {
     //     .scene = STATE_SCENE_EDIT,
-    //     .input_event = EVENT_KEY_DA,
+    //     .input_event = MSG_EVT_INPUT_KEY_DA,
     //     .cmd_count = 2,
     //     .cmds = { ROUTE_CMD_TONE(800, 300), ROUTE_CMD_TEXT("-") },
     // },

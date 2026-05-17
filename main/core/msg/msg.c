@@ -30,7 +30,7 @@ esp_err_t msg_send_status_change(msg_src_t src,
                                  int scene_value,
                                  TickType_t timeout_ticks)
 {
-    return msg_send_input_value(src, EVENT_STATUS_CHANGE, scene_value, timeout_ticks);
+    return msg_send_input_value(src, MSG_EVT_INPUT_SCENE_CHANGE, scene_value, timeout_ticks);
 }
 
 /* 发布 SYS 消息到订阅中心。 */

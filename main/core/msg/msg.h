@@ -78,29 +78,6 @@ typedef enum {
 
 } msg_event_t;
 
-/* Compatibility aliases for existing code paths. */
-#define EVENT_KEY_DI MSG_EVT_INPUT_KEY_DI
-#define EVENT_KEY_DA MSG_EVT_INPUT_KEY_DA
-#define EVENT_ENCODER_CW MSG_EVT_INPUT_ENCODER_CW
-#define EVENT_ENCODER_CCW MSG_EVT_INPUT_ENCODER_CCW
-#define EVENT_ENCODER_PRESS MSG_EVT_INPUT_ENCODER_PRESS
-#define EVENT_STATUS_CHANGE MSG_EVT_INPUT_SCENE_CHANGE
-
-#define CMD_UI_UPDATE_TEXT MSG_EVT_CMD_UI_UPDATE_TEXT
-#define CMD_UI_SCROLL MSG_EVT_CMD_UI_SCROLL
-#define CMD_UI_NAV_STEP MSG_EVT_CMD_UI_NAV_STEP
-
-#define CMD_AUDIO_TONE MSG_EVT_CMD_AUDIO_TONE
-#define CMD_AUDIO_STOP MSG_EVT_CMD_AUDIO_STOP
-#define CMD_AUDIO_VOLUME_STEP MSG_EVT_CMD_AUDIO_VOLUME_STEP
-
-#define EVENT_INIT_DONE_LVGL MSG_EVT_SYS_INIT_DONE_LVGL
-#define EVENT_INIT_DONE_ENCODER MSG_EVT_SYS_INIT_DONE_ENCODER
-#define EVENT_INIT_DONE_RADIO MSG_EVT_SYS_INIT_DONE_RADIO
-#define EVENT_INIT_DONE_MIC MSG_EVT_SYS_INIT_DONE_MIC
-#define EVENT_INIT_DONE_KEY MSG_EVT_SYS_INIT_DONE_KEY
-
-
 typedef struct {
 	msg_src_t src;
 	msg_type_t type;
@@ -142,7 +119,7 @@ static inline msg_t msg_make_cmd_value(msg_src_t src, msg_event_t event, int val
 
 static inline msg_t msg_make_cmd_tone(msg_src_t src, int freq, int duration, uint32_t timestamp)
 {
-	msg_t msg = msg_make(src, MSG_TYPE_CMD, CMD_AUDIO_TONE, timestamp);
+	msg_t msg = msg_make(src, MSG_TYPE_CMD, MSG_EVT_CMD_AUDIO_TONE, timestamp);
 	msg.data.tone.freq = freq;
 	msg.data.tone.duration = duration;
 	return msg;
@@ -150,7 +127,7 @@ static inline msg_t msg_make_cmd_tone(msg_src_t src, int freq, int duration, uin
 
 static inline msg_t msg_make_cmd_text(msg_src_t src, const char *text, uint32_t timestamp)
 {
-	msg_t msg = msg_make(src, MSG_TYPE_CMD, CMD_UI_UPDATE_TEXT, timestamp);
+	msg_t msg = msg_make(src, MSG_TYPE_CMD, MSG_EVT_CMD_UI_UPDATE_TEXT, timestamp);
 	if(text == NULL) {
 		msg.data.text.text[0] = '\0';
 		return msg;
@@ -162,7 +139,7 @@ static inline msg_t msg_make_cmd_text(msg_src_t src, const char *text, uint32_t 
 }
 
 /**
- * @brief 发送一条输入消息到 con 的 input 队列。
+ * @brief 发布一条输入消息到消息订阅中心。
  *
  * 用法：
  * @code
@@ -203,11 +180,11 @@ esp_err_t msg_send_input_value(msg_src_t src,
 							   TickType_t timeout_ticks);
 
 /**
- * @brief 发送“场景切换”输入消息（EVENT_STATUS_CHANGE 的便捷封装）。
+ * @brief 发送“场景切换”输入消息（MSG_EVT_INPUT_SCENE_CHANGE 的便捷封装）。
  *
  * 说明：
  * - 本函数保持向后兼容，内部等价于
- *   msg_send_input_value(src, EVENT_STATUS_CHANGE, scene_value, timeout_ticks)。
+ *   msg_send_input_value(src, MSG_EVT_INPUT_SCENE_CHANGE, scene_value, timeout_ticks)。
  * - 推荐用于需要触发 state scene 变更的场景。
  *
  * 用法：
@@ -225,7 +202,7 @@ esp_err_t msg_send_status_change(msg_src_t src,
 								 TickType_t timeout_ticks);
 
 /**
- * @brief 发送一条系统消息到 con 的 sys 队列。
+ * @brief 发布一条系统消息到消息订阅中心。
  *
  * 用法：
  * @code

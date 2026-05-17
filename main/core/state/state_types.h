@@ -51,7 +51,7 @@ typedef enum {
  * @brief 一条“输出命令模板”。
  *
  * 含义：匹配到某条路由后，生成一条 msg_t 命令时所需的静态模板。
- * - cmd_event：输出命令类型（例如 CMD_AUDIO_TONE）
+ * - cmd_event：输出命令类型（例如 MSG_EVT_CMD_AUDIO_TONE）
  * - payload_type + data：命令参数（例如频率/时长、整数步进、文本）
  */
 typedef struct {

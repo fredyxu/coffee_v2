@@ -25,13 +25,13 @@ static void ui_actor_handle_encoder_input(const msg_t *msg)
     }
 
     switch(msg->event) {
-        case EVENT_ENCODER_CW:
+        case MSG_EVT_INPUT_ENCODER_CW:
             LOG("ui_actor encoder cw");
             break;
-        case EVENT_ENCODER_CCW:
+        case MSG_EVT_INPUT_ENCODER_CCW:
             LOG("ui_actor encoder ccw");
             break;
-        case EVENT_ENCODER_PRESS:
+        case MSG_EVT_INPUT_ENCODER_PRESS:
             LOG("ui_actor encoder press");
             break;
         default:

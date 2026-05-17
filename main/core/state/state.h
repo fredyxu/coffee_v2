@@ -52,7 +52,7 @@ esp_err_t state_set_scene(state_scene_t scene);
  * - out_count: 实际输出条数
  *
  * 特殊规则：
- * - input->event == EVENT_STATUS_CHANGE 时，不生成命令，仅切换 scene。
+ * - input->event == MSG_EVT_INPUT_SCENE_CHANGE 时，不生成命令，仅切换 scene。
  *
  * 返回值：
  * - ESP_OK：处理成功（可能 out_count=0）

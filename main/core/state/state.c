@@ -16,7 +16,7 @@
  *
  * 处理流程：
  * 1. 收到输入消息 input
- * 2. 若是 EVENT_STATUS_CHANGE，则更新 scene
+ * 2. 若是 MSG_EVT_INPUT_SCENE_CHANGE，则更新 scene
  * 3. 否则用 (scene + input_event) 查路由表
  * 4. 把命中的命令模板展开为标准 msg_t 命令数组，交给上层分发
  */
@@ -46,12 +46,12 @@ static bool state_scene_valid(state_scene_t scene)
 /** 限定 state 允许下发的命令集合，避免错误模板污染总线。 */
 static bool state_command_valid(msg_event_t evt)
 {
-    return evt == CMD_UI_UPDATE_TEXT
-        || evt == CMD_UI_SCROLL
-        || evt == CMD_UI_NAV_STEP
-        || evt == CMD_AUDIO_TONE
-        || evt == CMD_AUDIO_STOP
-        || evt == CMD_AUDIO_VOLUME_STEP;
+    return evt == MSG_EVT_CMD_UI_UPDATE_TEXT
+        || evt == MSG_EVT_CMD_UI_SCROLL
+        || evt == MSG_EVT_CMD_UI_NAV_STEP
+        || evt == MSG_EVT_CMD_AUDIO_TONE
+        || evt == MSG_EVT_CMD_AUDIO_STOP
+        || evt == MSG_EVT_CMD_AUDIO_VOLUME_STEP;
 }
 
 esp_err_t state_init(void)
@@ -155,7 +155,7 @@ static esp_err_t state_emit_ui_text_cmd(const msg_t *src_msg,
         return ESP_ERR_NO_MEM;
     }
 
-    out_msgs[0] = msg_make(src_msg->src, MSG_TYPE_CMD, CMD_UI_UPDATE_TEXT, (uint32_t)xTaskGetTickCount());
+    out_msgs[0] = msg_make(src_msg->src, MSG_TYPE_CMD, MSG_EVT_CMD_UI_UPDATE_TEXT, (uint32_t)xTaskGetTickCount());
     (void)snprintf(out_msgs[0].data.text.text, sizeof(out_msgs[0].data.text.text), "%s", text ? text : "");
     *out_count = 1;
     return ESP_OK;
@@ -174,7 +174,7 @@ esp_err_t state_handle_input(const msg_t *input,
     *out_count = 0;
 
     /* 特殊输入：状态切换事件，不做路由查找。 */
-    if(input->event == EVENT_STATUS_CHANGE) {
+    if(input->event == MSG_EVT_INPUT_SCENE_CHANGE) {
         return state_set_scene((state_scene_t)input->data.value);
     }
 
