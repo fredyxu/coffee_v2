@@ -12,6 +12,8 @@
 #include "modules/ui/page/page_home/page_home.h"
 #include "modules/ui/page/page_settings/page_settings.h"
 #include "modules/ui/page/page_settings/page_settings_item.h"
+#include "modules/ui/ui_actor.h"
+
 
 #define UI_ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
@@ -29,8 +31,8 @@ static void ui_screen_init() {
  * @param page_id 目标页面枚举
  * @return ESP_OK 成功，其他表示参数或状态有误
  */
-esp_err_t page_show(page_id_t page_id)
-{
+esp_err_t page_show(page_id_t page_id) {
+	ui_actor_clean_ops();
     if(page_id < PAGE_INIT || page_id > PAGE_NONE) {
         LOG("无效的页面 ID: %d", page_id);
         return ESP_ERR_INVALID_ARG;

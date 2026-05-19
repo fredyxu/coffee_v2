@@ -2,12 +2,14 @@
 
 /**
  * @file msg.h
- * @brief 消息结构与消息发送助手接口。
+ * @brief 系统内部消息结构与消息发送助手接口。
  *
  * 设计目标：
  * 1. 统一消息结构（src/type/event/payload）。
- * 2. 提供常用消息构造与发送封装，减少重复样板代码。
- * 3. 通过 type 区分 INPUT/CMD/SYS 三条语义通道。
+ * 2. 让各模块通过小型 msg_t 交换控制消息、输入事件和状态事件。
+ * 3. 大数据流不要直接放进 msg_t，例如音频流、WebSocket 大二进制数据应走
+ *    ringbuffer/streambuffer，msg_t 只用于发送“数据可读/可写”等通知。
+ * 4. 具体发布路由在 msg_sub 模块中完成，本文件只定义消息本身和发送助手。
  */
 
 #include <string.h>
@@ -24,6 +26,12 @@ typedef uint32_t TickType_t;
 #include "freertos/FreeRTOS.h"
 #endif
 
+/*
+ * 消息来源。
+ *
+ * src 表示“谁发出的消息”，主要用于接收方判断来源、日志打印和调试。
+ * 它不参与订阅路由；订阅路由由 msg_event_t 映射到 msg_topic_t 完成。
+ */
 typedef enum {
 	MSG_SRC_ENCODER,
 	MSG_SRC_KEY,
@@ -34,12 +42,32 @@ typedef enum {
 	MSG_SRC_APP_INIT,
 } msg_src_t;
 
+/*
+ * 消息类型。
+ *
+ * INPUT:
+ *   用户输入类事件，例如编码器旋转、按键。
+ * CMD:
+ *   命令类事件，通常表示要求某个模块执行动作。
+ * SYS:
+ *   系统状态类事件，例如初始化完成、网络连接状态。
+ */
 typedef enum {
 	MSG_TYPE_INPUT,
 	MSG_TYPE_CMD,
 	MSG_TYPE_SYS,
 } msg_type_t;
 
+/*
+ * 具体消息事件。
+ *
+ * 订阅系统不会直接按 event 订阅，而是把 event 映射到 topic。
+ * actor 收到 msg_t 后，再根据 event 做更细的业务分发。
+ *
+ * 新增 event 时要注意：
+ * - 如果希望 msg_publish_auto() 能自动发布它，需要在 msg_sub.c 中补充映射。
+ * - 如果 event 需要携带数据，要明确使用 msg_t.data 中哪个字段。
+ */
 typedef enum {
 	MSG_EVT_INPUT_KEY_DI,
 	MSG_EVT_INPUT_KEY_DA,
@@ -47,6 +75,7 @@ typedef enum {
 	MSG_EVT_INPUT_ENCODER_CW,
 	MSG_EVT_INPUT_ENCODER_CCW,
 	MSG_EVT_INPUT_ENCODER_PRESS,
+	MSG_EVT_INPUT_ENCODER_LONG_PRESS,
 	MSG_EVT_INPUT_SCENE_CHANGE,
 
 	MSG_EVT_CMD_UI_UPDATE_TEXT,
@@ -78,6 +107,23 @@ typedef enum {
 
 } msg_event_t;
 
+/*
+ * 系统消息。
+ *
+ * msg_t 是跨模块投递的固定大小消息。FreeRTOS queue 会按值拷贝它，因此这里
+ * 应保持结构体较小、字段语义清晰。
+ *
+ * src:
+ *   消息来源模块。
+ * type:
+ *   消息大类，方便接收方先做粗分。
+ * event:
+ *   具体事件，接收方最终通常按它执行处理逻辑。
+ * timestamp:
+ *   创建消息时的 tick，便于判断事件发生时间或调试延迟。
+ * data:
+ *   小型 payload 联合体。每条 event 应约定使用其中一种字段。
+ */
 typedef struct {
 	msg_src_t src;
 	msg_type_t type;
@@ -87,19 +133,18 @@ typedef struct {
 
 	union {
 		int value;
+		char text[64];
 
 		struct {
 			int freq;
 			int duration;
 		} tone;
 
-		struct {
-			char text[64];
-		} text;
 	} data;
 
 } msg_t;
 
+/* 构造基础消息，只填充 src/type/event/timestamp，payload 默认为 0。 */
 static inline msg_t msg_make(msg_src_t src, msg_type_t type, msg_event_t event, uint32_t timestamp)
 {
 	msg_t msg = {0};
@@ -110,6 +155,7 @@ static inline msg_t msg_make(msg_src_t src, msg_type_t type, msg_event_t event, 
 	return msg;
 }
 
+/* 构造带整数 payload 的 CMD 消息。 */
 static inline msg_t msg_make_cmd_value(msg_src_t src, msg_event_t event, int value, uint32_t timestamp)
 {
 	msg_t msg = msg_make(src, MSG_TYPE_CMD, event, timestamp);
@@ -117,6 +163,7 @@ static inline msg_t msg_make_cmd_value(msg_src_t src, msg_event_t event, int val
 	return msg;
 }
 
+/* 构造音频 tone 命令。freq 为频率，duration 为持续时间，单位由音频模块定义。 */
 static inline msg_t msg_make_cmd_tone(msg_src_t src, int freq, int duration, uint32_t timestamp)
 {
 	msg_t msg = msg_make(src, MSG_TYPE_CMD, MSG_EVT_CMD_AUDIO_TONE, timestamp);
@@ -125,21 +172,24 @@ static inline msg_t msg_make_cmd_tone(msg_src_t src, int freq, int duration, uin
 	return msg;
 }
 
+/* 构造 UI 文本更新命令。文本会被拷贝并保证以 '\0' 结尾。 */
 static inline msg_t msg_make_cmd_text(msg_src_t src, const char *text, uint32_t timestamp)
 {
 	msg_t msg = msg_make(src, MSG_TYPE_CMD, MSG_EVT_CMD_UI_UPDATE_TEXT, timestamp);
 	if(text == NULL) {
-		msg.data.text.text[0] = '\0';
+		msg.data.text[0] = '\0';
 		return msg;
 	}
 
-	strncpy(msg.data.text.text, text, sizeof(msg.data.text.text) - 1);
-	msg.data.text.text[sizeof(msg.data.text.text) - 1] = '\0';
+	strncpy(msg.data.text, text, sizeof(msg.data.text) - 1);
+	msg.data.text[sizeof(msg.data.text) - 1] = '\0';
 	return msg;
 }
 
 /**
- * @brief 发布一条输入消息到消息订阅中心。
+ * @brief 发布一条 INPUT 消息。
+ *
+ * 函数内部会根据 msg->event 自动选择 topic，并投递给订阅了该 topic 的 actor。
  *
  * 用法：
  * @code
@@ -151,6 +201,7 @@ static inline msg_t msg_make_cmd_text(msg_src_t src, const char *text, uint32_t 
  * @param timeout_ticks 队列发送超时（FreeRTOS tick）。0 表示不阻塞。
  * @return ESP_OK 发送成功；
  *         ESP_ERR_INVALID_ARG 参数非法；
+ *         ESP_ERR_NOT_SUPPORTED event 没有配置 topic 映射；
  *         ESP_ERR_TIMEOUT 队列满或超时。
  */
 esp_err_t msg_send_input(const msg_t *msg, TickType_t timeout_ticks);
@@ -180,29 +231,9 @@ esp_err_t msg_send_input_value(msg_src_t src,
 							   TickType_t timeout_ticks);
 
 /**
- * @brief 发送“场景切换”输入消息（MSG_EVT_INPUT_SCENE_CHANGE 的便捷封装）。
+ * @brief 发布一条 SYS 消息。
  *
- * 说明：
- * - 本函数保持向后兼容，内部等价于
- *   msg_send_input_value(src, MSG_EVT_INPUT_SCENE_CHANGE, scene_value, timeout_ticks)。
- * - 推荐用于需要触发 state scene 变更的场景。
- *
- * 用法：
- * @code
- * (void)msg_send_status_change(MSG_SRC_LVGL, STATE_SCENE_HOME, 0);
- * @endcode
- *
- * @param src 消息来源模块。
- * @param scene_value 目标场景值（通常是 state_scene_t 枚举值）。
- * @param timeout_ticks 队列发送超时（tick）。
- * @return ESP_OK / ESP_ERR_INVALID_ARG / ESP_ERR_TIMEOUT。
- */
-esp_err_t msg_send_status_change(msg_src_t src,
-								 int scene_value,
-								 TickType_t timeout_ticks);
-
-/**
- * @brief 发布一条系统消息到消息订阅中心。
+ * 函数内部会根据 msg->event 自动选择 topic，并投递给订阅了该 topic 的 actor。
  *
  * 用法：
  * @code
@@ -246,7 +277,7 @@ esp_err_t msg_send_sys_value(msg_src_t src,
  * 行为：
  * 1. 自动填充 type = MSG_TYPE_SYS；
  * 2. 自动填充 timestamp = xTaskGetTickCount()；
- * 3. 将 text 拷贝到 msg.data.text.text（自动截断并补 '\0'）。
+ * 3. 将 text 拷贝到 msg.data.text（自动截断并补 '\0'）。
  *
  * 用法：
  * @code

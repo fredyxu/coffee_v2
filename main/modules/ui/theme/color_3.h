@@ -25,4 +25,4 @@
 #define UI_COLOR_ERROR					lv_color_hex(0xF85149)
 #define UI_COLOR_BORDER					lv_color_hex(0x484F58)
 
-#define UI_COLOR_BORDER_2				lv_color_hex(0x5CC9F5)
+#define UI_COLOR_FOCUS_1				lv_color_hex(0x334963)

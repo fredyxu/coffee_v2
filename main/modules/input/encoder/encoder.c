@@ -14,6 +14,7 @@ encoder_config_t encoder_default_config(void)
         .pin_b = PIN_ENCODER_B,
         .pin_sw = PIN_ENCODER_SW,
         .sw_debounce_ms = 25,
+        .sw_long_press_ms = 800,
     };
     return cfg;
 }

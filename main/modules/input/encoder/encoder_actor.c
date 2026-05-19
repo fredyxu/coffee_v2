@@ -18,9 +18,13 @@ typedef struct {
     int pin_b;
     int pin_sw;
     uint16_t sw_debounce_ms;
+    uint16_t sw_long_press_ms;
     uint8_t prev_state;
     int8_t acc;
-    TickType_t last_sw_tick;
+    TickType_t last_sw_edge_tick;
+    TickType_t sw_press_tick;
+    bool sw_pressed;
+    bool sw_long_sent;
 } encoder_actor_ctx_t;
 
 static TaskHandle_t s_task = NULL;
@@ -76,14 +80,64 @@ static void encoder_process_sw(void)
     TickType_t now = xTaskGetTickCount();
     TickType_t debounce_ticks = pdMS_TO_TICKS(s_ctx.sw_debounce_ms);
 
-    if((now - s_ctx.last_sw_tick) < debounce_ticks) {
+    if((now - s_ctx.last_sw_edge_tick) < debounce_ticks) {
+        return;
+    }
+    s_ctx.last_sw_edge_tick = now;
+
+    if(encoder_read_sw() == 0) {
+        if(!s_ctx.sw_pressed) {
+            s_ctx.sw_pressed = true;
+            s_ctx.sw_long_sent = false;
+            s_ctx.sw_press_tick = now;
+        }
         return;
     }
 
-    if(encoder_read_sw() == 0) {
-        s_ctx.last_sw_tick = now;
-        encoder_post_input_event(MSG_EVT_INPUT_ENCODER_PRESS);
+    if(s_ctx.sw_pressed) {
+        if(!s_ctx.sw_long_sent) {
+            encoder_post_input_event(MSG_EVT_INPUT_ENCODER_PRESS);
+        }
+        s_ctx.sw_pressed = false;
+        s_ctx.sw_long_sent = false;
     }
+}
+
+static TickType_t encoder_sw_wait_ticks(void)
+{
+    if(!s_ctx.sw_pressed || s_ctx.sw_long_sent) {
+        return portMAX_DELAY;
+    }
+
+    TickType_t now = xTaskGetTickCount();
+    TickType_t long_press_ticks = pdMS_TO_TICKS(s_ctx.sw_long_press_ms);
+    TickType_t elapsed = now - s_ctx.sw_press_tick;
+    if(elapsed >= long_press_ticks) {
+        return 0;
+    }
+
+    return long_press_ticks - elapsed;
+}
+
+static void encoder_process_sw_long_press(void)
+{
+    if(!s_ctx.sw_pressed || s_ctx.sw_long_sent) {
+        return;
+    }
+
+    TickType_t now = xTaskGetTickCount();
+    TickType_t long_press_ticks = pdMS_TO_TICKS(s_ctx.sw_long_press_ms);
+    if((now - s_ctx.sw_press_tick) < long_press_ticks) {
+        return;
+    }
+
+    if(encoder_read_sw() != 0) {
+        s_ctx.sw_pressed = false;
+        return;
+    }
+
+    s_ctx.sw_long_sent = true;
+    encoder_post_input_event(MSG_EVT_INPUT_ENCODER_LONG_PRESS);
 }
 
 static void encoder_actor_task(void *arg)
@@ -92,7 +146,8 @@ static void encoder_actor_task(void *arg)
 
     uint32_t gpio_num = 0;
     while(1) {
-        if(xQueueReceive(s_evt_q, &gpio_num, portMAX_DELAY) != pdTRUE) {
+        if(xQueueReceive(s_evt_q, &gpio_num, encoder_sw_wait_ticks()) != pdTRUE) {
+            encoder_process_sw_long_press();
             continue;
         }
 
@@ -121,9 +176,13 @@ esp_err_t encoder_actor_init(void)
     s_ctx.pin_b = cfg.pin_b;
     s_ctx.pin_sw = cfg.pin_sw;
     s_ctx.sw_debounce_ms = cfg.sw_debounce_ms;
+    s_ctx.sw_long_press_ms = cfg.sw_long_press_ms;
     s_ctx.prev_state = (uint8_t)(((encoder_read_a() & 0x1) << 1) | (encoder_read_b() & 0x1));
     s_ctx.acc = 0;
-    s_ctx.last_sw_tick = 0;
+    s_ctx.last_sw_edge_tick = 0;
+    s_ctx.sw_press_tick = 0;
+    s_ctx.sw_pressed = false;
+    s_ctx.sw_long_sent = false;
 
     s_evt_q = xQueueCreate(32, sizeof(uint32_t));
     if(s_evt_q == NULL) {
@@ -140,7 +199,7 @@ esp_err_t encoder_actor_init(void)
     if(err != ESP_OK) goto fail;
     err = gpio_set_intr_type(s_ctx.pin_b, GPIO_INTR_ANYEDGE);
     if(err != ESP_OK) goto fail;
-    err = gpio_set_intr_type(s_ctx.pin_sw, GPIO_INTR_NEGEDGE);
+    err = gpio_set_intr_type(s_ctx.pin_sw, GPIO_INTR_ANYEDGE);
     if(err != ESP_OK) goto fail;
 
     err = gpio_isr_handler_add(s_ctx.pin_a, encoder_gpio_isr, (void *)(uintptr_t)s_ctx.pin_a);

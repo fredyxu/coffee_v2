@@ -34,17 +34,26 @@ static const settings_sub_item_t s_wifi_sub_items[] = {
         .value_list = s_wifi_ssid_list,
 		.value_count = &s_wifi_ssid_count,
     },
-    {
-        .id = SETTINGS_SUB_ITEM_ID_WIFI_SSID,
-        .value_type = SETTINGS_VALUE_TYPE_TEXT,
-        .title = "WiFi名称",
-        .value = &app_settings.wifi_ssid,
-    },
+    // {
+    //     .id = SETTINGS_SUB_ITEM_ID_WIFI_SSID,
+    //     .value_type = SETTINGS_VALUE_TYPE_TEXT,
+    //     .title = "WiFi名称",
+    //     .value = &app_settings.wifi_ssid,
+    // },
     {
         .id = SETTINGS_SUB_ITEM_ID_WIFI_PASSWORD,
         .value_type = SETTINGS_VALUE_TYPE_PASSWORD,
         .title = "WiFi密码",
         .value = &app_settings.wifi_password,
+    },
+	{
+        .id = SETTINGS_SUB_ITEM_ID_AUDIO_VOLUME,
+        .value_type = SETTINGS_VALUE_TYPE_INT,
+        .title = "音频音量",
+        .value = &app_settings.audio_volume,
+        .min_value = 0,
+        .max_value = 100,
+        .step = 1,
     },
 
 };

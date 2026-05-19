@@ -8,35 +8,28 @@
 #include "core/msg/msg_sub.h"
 #include "core/utils/log.h"
 
-#define UI_ACTOR_INPUT_Q_LEN 16
+static const ui_page_ops_t *s_page_ops = NULL;
+
+
+#define UI_ACTOR_INBOX_Q_LEN 16
 
 typedef struct {
     TaskHandle_t task;
-    QueueHandle_t input_q;
-    msg_sub_handle_t encoder_sub;
+    QueueHandle_t inbox_q;
+    msg_sub_handle_t sub;
 } ui_actor_ctx_t;
 
 static ui_actor_ctx_t s_ui_actor = {0};
 
-static void ui_actor_handle_encoder_input(const msg_t *msg)
+static void ui_actor_handle_msg(const msg_t *msg)
 {
     if(msg == NULL || msg->type != MSG_TYPE_INPUT) {
         return;
     }
 
-    switch(msg->event) {
-        case MSG_EVT_INPUT_ENCODER_CW:
-            LOG("ui_actor encoder cw");
-            break;
-        case MSG_EVT_INPUT_ENCODER_CCW:
-            LOG("ui_actor encoder ccw");
-            break;
-        case MSG_EVT_INPUT_ENCODER_PRESS:
-            LOG("ui_actor encoder press");
-            break;
-        default:
-            break;
-    }
+	if(s_page_ops != NULL && s_page_ops->on_input != NULL) {
+		s_page_ops->on_input(msg);
+	}
 }
 
 static void ui_actor_task(void *arg)
@@ -45,24 +38,36 @@ static void ui_actor_task(void *arg)
 
     msg_t msg;
     while(1) {
-        if(xQueueReceive(s_ui_actor.input_q, &msg, portMAX_DELAY) != pdTRUE) {
+        if(xQueueReceive(s_ui_actor.inbox_q, &msg, portMAX_DELAY) != pdTRUE) {
             continue;
         }
 
-        ui_actor_handle_encoder_input(&msg);
+        ui_actor_handle_msg(&msg);
     }
 }
 
-static esp_err_t ui_actor_subscribe_encoder(void)
+static esp_err_t ui_actor_subscribe(void)
 {
-    if(s_ui_actor.input_q == NULL) {
-        s_ui_actor.input_q = xQueueCreate(UI_ACTOR_INPUT_Q_LEN, sizeof(msg_t));
-        if(s_ui_actor.input_q == NULL) {
-            return ESP_ERR_NO_MEM;
+    bool queue_created = false;
+
+    if(s_ui_actor.inbox_q == NULL) {
+        esp_err_t err = msg_actor_queue_create_with_len(UI_ACTOR_INBOX_Q_LEN, &s_ui_actor.inbox_q);
+        if(err != ESP_OK) {
+            return err;
         }
+        queue_created = true;
     }
 
-    return msg_sub_queue(MSG_TOPIC_ENCODER_INPUT, s_ui_actor.input_q, &s_ui_actor.encoder_sub);
+    const msg_topic_t topics[] = {
+        MSG_TOPIC_ENCODER_INPUT,
+    };
+    esp_err_t err = msg_sub(s_ui_actor.inbox_q, topics, sizeof(topics) / sizeof(topics[0]), &s_ui_actor.sub);
+    if(err != ESP_OK && queue_created) {
+        vQueueDelete(s_ui_actor.inbox_q);
+        s_ui_actor.inbox_q = NULL;
+    }
+
+    return err;
 }
 
 esp_err_t ui_actor_init(void)
@@ -71,9 +76,9 @@ esp_err_t ui_actor_init(void)
         return ESP_OK;
     }
 
-    esp_err_t err = ui_actor_subscribe_encoder();
+    esp_err_t err = ui_actor_subscribe();
     if(err != ESP_OK) {
-        LOG("ui_actor subscribe encoder failed: %s", esp_err_to_name(err));
+        LOG("ui_actor subscribe failed: %s", esp_err_to_name(err));
         return err;
     }
 
@@ -88,8 +93,22 @@ esp_err_t ui_actor_init(void)
     );
     if(ok != pdPASS) {
         s_ui_actor.task = NULL;
+        (void)msg_unsub(s_ui_actor.sub, NULL, 0);
+        s_ui_actor.sub = MSG_SUB_HANDLE_INVALID;
+        if(s_ui_actor.inbox_q != NULL) {
+            vQueueDelete(s_ui_actor.inbox_q);
+            s_ui_actor.inbox_q = NULL;
+        }
         return ESP_FAIL;
     }
 
     return ESP_OK;
+}
+
+
+void ui_actor_set_ops(const ui_page_ops_t *ops) {
+	s_page_ops = ops;
+}
+void ui_actor_clean_ops() {
+	s_page_ops = NULL;
 }

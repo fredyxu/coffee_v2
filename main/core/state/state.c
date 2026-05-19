@@ -135,7 +135,7 @@ static esp_err_t state_build_cmd(const msg_t *input,
             out_msg->data.tone.duration = tpl->data.tone.duration;
             break;
         case STATE_PAYLOAD_TEXT:
-            (void)snprintf(out_msg->data.text.text, sizeof(out_msg->data.text.text), "%s",
+            (void)snprintf(out_msg->data.text, sizeof(out_msg->data.text), "%s",
                            tpl->data.text.text ? tpl->data.text.text : "");
             break;
         default:
@@ -156,7 +156,7 @@ static esp_err_t state_emit_ui_text_cmd(const msg_t *src_msg,
     }
 
     out_msgs[0] = msg_make(src_msg->src, MSG_TYPE_CMD, MSG_EVT_CMD_UI_UPDATE_TEXT, (uint32_t)xTaskGetTickCount());
-    (void)snprintf(out_msgs[0].data.text.text, sizeof(out_msgs[0].data.text.text), "%s", text ? text : "");
+    (void)snprintf(out_msgs[0].data.text, sizeof(out_msgs[0].data.text), "%s", text ? text : "");
     *out_count = 1;
     return ESP_OK;
 }
@@ -233,7 +233,7 @@ esp_err_t state_handle_sys(const msg_t *sys_msg,
             if(current_scene != STATE_SCENE_INIT) {
                 return ESP_OK;
             }
-            return state_emit_ui_text_cmd(sys_msg, sys_msg->data.text.text, out_msgs, out_cap, out_count);
+            return state_emit_ui_text_cmd(sys_msg, sys_msg->data.text, out_msgs, out_cap, out_count);
         case MSG_EVT_SYS_INIT_DONE_LVGL:
             if(current_scene != STATE_SCENE_INIT) {
                 return ESP_OK;

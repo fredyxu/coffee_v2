@@ -13,6 +13,7 @@ typedef struct {
     int pin_b;
     int pin_sw;
     uint16_t sw_debounce_ms;
+    uint16_t sw_long_press_ms;
 } encoder_config_t;
 
 encoder_config_t encoder_default_config(void);

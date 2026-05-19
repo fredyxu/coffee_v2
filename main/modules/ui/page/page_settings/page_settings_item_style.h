@@ -26,6 +26,14 @@ void page_settings_item_apply_style_page_item_list(
 	lv_obj_t *obj_title_label
 );
 
+void page_settings_item_apply_style_page_item_int(
+	lv_obj_t *obj_body,
+	lv_obj_t *obj_title_body,
+	lv_obj_t *obj_title_label,
+	lv_obj_t *obj_slider_body,
+	lv_obj_t *obj_slider
+);
+
 #ifdef __cplusplus
 }
 #endif

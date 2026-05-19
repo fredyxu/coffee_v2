@@ -13,6 +13,7 @@ typedef struct {
 	char *wifi_ssid;
 	char *wifi_password;
 	bool wifi_enable;
+	int audio_volume;
 } app_settings_t;
 
 extern app_settings_t app_settings;
