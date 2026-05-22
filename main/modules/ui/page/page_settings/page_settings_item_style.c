@@ -38,7 +38,7 @@ static lv_style_t style_focus_body;
 static void style_init_focus_body() {
 	lv_style_init(&style_focus_body);
 	lv_style_set_bg_opa(&style_focus_body, LV_OPA_COVER);
-	lv_style_set_border_color(&style_focus_body, UI_COLOR_FOCUS_1);
+	lv_style_set_border_color(&style_focus_body, UI_COLOR_BORDER);
 	lv_style_set_text_color(&style_focus_body, UI_COLOR_TEXT);
 }
 
@@ -60,38 +60,48 @@ static void style_init_edit_body() {
 static lv_style_t style_int_body;
 static lv_style_t style_int_title_body;
 static lv_style_t style_int_title_label;
+static lv_style_t style_int_value_label;
 static lv_style_t style_int_slider_body;
 static lv_style_t style_int_slider;
 static void style_init_item_value_int() {
+	// 外框
 	ui_style_init_column(&style_int_body);
 	style_body_init(&style_int_body);
 	lv_style_set_height(&style_int_body, SETTINGS_ITEM_HEIGHT * 2 + 2);
 	
-
+	// 标题外框
 	ui_style_init_row(&style_int_title_body);
 	lv_style_set_size(&style_int_title_body, LV_PCT(100), SETTINGS_ITEM_HEIGHT *0.6);
 	lv_style_set_bg_opa(&style_int_title_body, LV_OPA_0);
 
-
+	// 滑动块外框
 	ui_style_init_column(&style_int_slider_body);
 	lv_style_set_size(&style_int_slider_body, LV_PCT(100), SETTINGS_ITEM_HEIGHT);
 	lv_style_set_bg_opa(&style_int_slider_body, LV_OPA_0);
 	lv_style_set_border_width(&style_int_slider_body, 0);
 
-
+	// 滑动块
 	lv_style_init(&style_int_slider);
-	lv_style_set_size(&style_int_slider, LV_PCT(100), 3);
+	lv_style_set_size(&style_int_slider, LV_PCT(90), 3);
 	lv_style_set_margin_top(&style_int_slider, CONFIG_UI_MARGIN*2);
 
-
+	// 标题文字
 	ui_style_init_row(&style_int_title_label);
+	lv_style_set_size(&style_int_title_label, LV_PCT(50), SETTINGS_ITEM_HEIGHT *0.6);
 	lv_style_set_text_font(&style_int_title_label, UI_FONT_12);
 	lv_style_set_text_color(&style_int_title_label, UI_COLOR_TEXT);
+	// 数值文字
+	ui_style_init_row(&style_int_value_label);
+	lv_style_set_size(&style_int_value_label, LV_PCT(50), SETTINGS_ITEM_HEIGHT *0.6);
+	lv_style_set_text_font(&style_int_value_label, UI_FONT_12);
+	lv_style_set_text_color(&style_int_value_label, UI_COLOR_TEXT);
+	lv_style_set_text_align(&style_int_value_label, LV_TEXT_ALIGN_RIGHT);
 }
 void page_settings_item_apply_style_page_item_int(
 	lv_obj_t *obj_body,
 	lv_obj_t *obj_title_body,
 	lv_obj_t *obj_title_label,
+	lv_obj_t *obj_value_label,
 	lv_obj_t *obj_slider_body,
 	lv_obj_t *obj_slider
 ) {
@@ -100,6 +110,7 @@ void page_settings_item_apply_style_page_item_int(
 	lv_obj_add_style(obj_title_label, &style_int_title_label, LV_STATE_DEFAULT);
 	lv_obj_add_style(obj_slider_body, &style_int_slider_body, LV_STATE_DEFAULT);
 	lv_obj_add_style(obj_slider, &style_int_slider, LV_STATE_DEFAULT);
+	lv_obj_add_style(obj_value_label, &style_int_value_label, LV_STATE_DEFAULT);
 
 	lv_obj_add_style(obj_body, &style_focus_body, LV_STATE_FOCUSED);
 	lv_obj_add_style(obj_body, &style_edit_body, LV_STATE_CHECKED);
@@ -148,8 +159,10 @@ void page_settings_item_apply_style_page_item_list(
 	lv_obj_t *obj_body,
 	lv_obj_t *obj_title_label) 
 {
-	lv_obj_add_style(obj_body, &style_list_body, 0);
-	lv_obj_add_style(obj_title_label, &style_list_title_label, 0);
+	lv_obj_add_style(obj_body, &style_list_body, LV_STATE_DEFAULT);
+	lv_obj_add_style(obj_title_label, &style_list_title_label, LV_STATE_DEFAULT);
+	lv_obj_add_style(obj_body, &style_focus_body, LV_STATE_FOCUSED);
+	lv_obj_add_style(obj_body, &style_edit_body, LV_STATE_CHECKED);
 }
 
 

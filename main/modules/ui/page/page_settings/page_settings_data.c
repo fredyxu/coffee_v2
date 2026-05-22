@@ -1,38 +1,31 @@
 #include "page_settings_data.h"
 #include "config/config_settings.h"
+#include "modules/wifi/wifi_settings.h"
 
-#define SETTINGS_WIFI_SSID_MAX 16
-
-static size_t s_wifi_ssid_count = 3;
-
-static settings_value_list_t s_wifi_ssid_list[SETTINGS_WIFI_SSID_MAX] = {
+static settings_sub_item_t s_wifi_sub_items[] = {
 	{
-		.title = "SSID_1",
-		.value_int = -50,
-	},
-	{
-		.title = "SSID_2",
-		.value_int = -70,
-	},
-	{
-		.title = "SSID_3",
-		.value_int = -80,
-	},
-};
-
-static const settings_sub_item_t s_wifi_sub_items[] = {
+        .id = SETTINGS_SUB_ITEM_ID_BACK,
+        .value_type = SETTINGS_VALUE_TYPE_ACTION,
+        .title = "返回",
+        .value = &app_settings.wifi_enable,
+    },
     {
         .id = SETTINGS_SUB_ITEM_ID_WIFI_ENABLE,
         .value_type = SETTINGS_VALUE_TYPE_BOOL,
         .title = "开启WIFI",
         .value = &app_settings.wifi_enable,
     },
+	{
+		.id = SETTINGS_SUB_ITEM_ID_WIFI_SCAN,
+		.value_type = SETTINGS_VALUE_TYPE_ACTION,
+		.title = "扫描网络",
+		.has_cmd_event = true,
+		.cmd_event = MSG_EVT_CMD_WIFI_SCAN,
+	},
     {
         .id = SETTINGS_SUB_ITEM_ID_WIFI_SSID_LIST,
         .value_type = SETTINGS_VALUE_TYPE_LIST,
         .title = "可用网络",
-        .value_list = s_wifi_ssid_list,
-		.value_count = &s_wifi_ssid_count,
     },
     // {
     //     .id = SETTINGS_SUB_ITEM_ID_WIFI_SSID,
@@ -40,12 +33,7 @@ static const settings_sub_item_t s_wifi_sub_items[] = {
     //     .title = "WiFi名称",
     //     .value = &app_settings.wifi_ssid,
     // },
-    {
-        .id = SETTINGS_SUB_ITEM_ID_WIFI_PASSWORD,
-        .value_type = SETTINGS_VALUE_TYPE_PASSWORD,
-        .title = "WiFi密码",
-        .value = &app_settings.wifi_password,
-    },
+    
 	{
         .id = SETTINGS_SUB_ITEM_ID_AUDIO_VOLUME,
         .value_type = SETTINGS_VALUE_TYPE_INT,
@@ -57,6 +45,18 @@ static const settings_sub_item_t s_wifi_sub_items[] = {
     },
 
 };
+
+static void page_settings_init_wifi_items(void)
+{
+	for(size_t i = 0; i < sizeof(s_wifi_sub_items) / sizeof(s_wifi_sub_items[0]); i++) {
+		if(s_wifi_sub_items[i].id == SETTINGS_SUB_ITEM_ID_WIFI_SSID_LIST) {
+			s_wifi_sub_items[i].value_list = wifi_settings_ssid_list();
+			s_wifi_sub_items[i].value_count = wifi_settings_ssid_count();
+			s_wifi_sub_items[i].value_list_max = wifi_settings_ssid_max();
+			return;
+		}
+	}
+}
 
 static const settings_sub_item_t s_audio_sub_items[] = {
     // {
@@ -141,6 +141,7 @@ const settings_sub_item_t *page_settings_get_sub_items(settings_item_id_t id, si
 
     switch (id) {
     case SETTINGS_ITEM_ID_WIFI:
+		page_settings_init_wifi_items();
         if (count != NULL) {
             *count = sizeof(s_wifi_sub_items) / sizeof(s_wifi_sub_items[0]);
         }

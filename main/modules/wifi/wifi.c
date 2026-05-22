@@ -27,12 +27,15 @@ typedef struct {
 } wifi_ctx_t;
 
 static wifi_ctx_t s_wifi = {0};
+static wifi_ap_record_t s_scan_records[WIFI_MODULE_SCAN_MAX_APS];
 
 static void wifi_emit_event_full(wifi_module_event_id_t id,
                                  int reason,
                                  int rssi,
                                  uint32_t ip,
                                  uint16_t ap_count,
+                                 uint8_t authmode,
+                                 uint8_t channel,
                                  const char *ssid)
 {
     if(s_wifi.cb == NULL) {
@@ -45,6 +48,8 @@ static void wifi_emit_event_full(wifi_module_event_id_t id,
         .rssi = rssi,
         .ip = ip,
         .ap_count = ap_count,
+        .authmode = authmode,
+        .channel = channel,
     };
     if(ssid != NULL) {
         strncpy(evt.ssid, ssid, sizeof(evt.ssid) - 1);
@@ -55,45 +60,53 @@ static void wifi_emit_event_full(wifi_module_event_id_t id,
 
 static void wifi_emit_event(wifi_module_event_id_t id, int reason, int rssi, uint32_t ip)
 {
-    wifi_emit_event_full(id, reason, rssi, ip, 0, NULL);
+    wifi_emit_event_full(id, reason, rssi, ip, 0, 0, 0, NULL);
 }
 
 static void wifi_handle_scan_done(const wifi_event_sta_scan_done_t *scan_done)
 {
     if(scan_done == NULL || scan_done->status != 0) {
-        wifi_emit_event_full(WIFI_MOD_EVT_SCAN_FAILED, scan_done != NULL ? (int)scan_done->status : -1, 0, 0, 0, NULL);
+        wifi_emit_event_full(WIFI_MOD_EVT_SCAN_FAILED, scan_done != NULL ? (int)scan_done->status : -1, 0, 0, 0, 0, 0, NULL);
         return;
     }
 
     uint16_t ap_count = 0;
     esp_err_t err = esp_wifi_scan_get_ap_num(&ap_count);
     if(err != ESP_OK) {
-        wifi_emit_event_full(WIFI_MOD_EVT_SCAN_FAILED, (int)err, 0, 0, 0, NULL);
+        wifi_emit_event_full(WIFI_MOD_EVT_SCAN_FAILED, (int)err, 0, 0, 0, 0, 0, NULL);
         return;
     }
 
-    wifi_ap_record_t records[WIFI_MODULE_SCAN_MAX_APS] = {0};
+    memset(s_scan_records, 0, sizeof(s_scan_records));
+
     uint16_t record_count = ap_count;
     if(record_count > WIFI_MODULE_SCAN_MAX_APS) {
         record_count = WIFI_MODULE_SCAN_MAX_APS;
     }
 
     if(record_count > 0) {
-        err = esp_wifi_scan_get_ap_records(&record_count, records);
+        err = esp_wifi_scan_get_ap_records(&record_count, s_scan_records);
         if(err != ESP_OK) {
-            wifi_emit_event_full(WIFI_MOD_EVT_SCAN_FAILED, (int)err, 0, 0, 0, NULL);
+            wifi_emit_event_full(WIFI_MOD_EVT_SCAN_FAILED, (int)err, 0, 0, 0, 0, 0, NULL);
             return;
         }
     }
 
     for(uint16_t i = 0; i < record_count; i++) {
-        if(records[i].ssid[0] == '\0') {
+        if(s_scan_records[i].ssid[0] == '\0') {
             continue;
         }
-        wifi_emit_event_full(WIFI_MOD_EVT_SCAN_AP_FOUND, 0, records[i].rssi, 0, ap_count, (const char *)records[i].ssid);
+        wifi_emit_event_full(WIFI_MOD_EVT_SCAN_AP_FOUND,
+                             0,
+                             s_scan_records[i].rssi,
+                             0,
+                             ap_count,
+                             (uint8_t)s_scan_records[i].authmode,
+                             s_scan_records[i].primary,
+                             (const char *)s_scan_records[i].ssid);
     }
 
-    wifi_emit_event_full(WIFI_MOD_EVT_SCAN_DONE, 0, 0, 0, ap_count, NULL);
+    wifi_emit_event_full(WIFI_MOD_EVT_SCAN_DONE, 0, 0, 0, ap_count, 0, 0, NULL);
 }
 
 static esp_err_t wifi_apply_sta_config(void)

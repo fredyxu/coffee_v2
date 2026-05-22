@@ -121,12 +121,12 @@ esp_err_t mic_init(const mic_config_t *cfg)
     s_mic.bits_per_sample = cfg->bits_per_sample;
     s_mic.inited = true;
 
-    LOG("mic init done (bclk=%d ws=%d din=%d sr=%u bps=%u)",
-        cfg->bclk_io,
-        cfg->ws_io,
-        cfg->din_io,
-        (unsigned)cfg->sample_rate,
-        (unsigned)cfg->bits_per_sample);
+    // LOG("mic init done (bclk=%d ws=%d din=%d sr=%u bps=%u)",
+        // cfg->bclk_io,
+        // cfg->ws_io,
+        // cfg->din_io,
+        // (unsigned)cfg->sample_rate,
+        // (unsigned)cfg->bits_per_sample);
     return ESP_OK;
 }
 

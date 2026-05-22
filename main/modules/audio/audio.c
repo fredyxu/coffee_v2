@@ -123,7 +123,7 @@ esp_err_t audio_init(const audio_config_t *cfg)
     s_audio.volume_percent = (cfg->volume_percent > 100) ? 100 : cfg->volume_percent;
     s_audio.inited = true;
 
-    LOG("audio init done (bclk=%d ws=%d dout=%d sr=%u)", cfg->bclk_io, cfg->ws_io, cfg->dout_io, (unsigned)cfg->sample_rate);
+    // LOG("audio init done (bclk=%d ws=%d dout=%d sr=%u)", cfg->bclk_io, cfg->ws_io, cfg->dout_io, (unsigned)cfg->sample_rate);
     return ESP_OK;
 }
 

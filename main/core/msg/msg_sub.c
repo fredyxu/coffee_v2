@@ -152,10 +152,20 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
             *out_topic = MSG_TOPIC_KEY_INPUT;
             return ESP_OK;
 
+        case MSG_EVT_CMD_WIFI_START:
+        case MSG_EVT_CMD_WIFI_STOP:
+        case MSG_EVT_CMD_WIFI_SCAN:
+        case MSG_EVT_CMD_WIFI_CONNECT:
+        case MSG_EVT_CMD_WIFI_DISCONNECT:
+        case MSG_EVT_CMD_WIFI_SET_CREDENTIALS:
+            *out_topic = MSG_TOPIC_WIFI_CMD;
+            return ESP_OK;
+
         case MSG_EVT_SYS_WIFI_CONNECTED:
         case MSG_EVT_SYS_WIFI_DISCONNECTED:
         case MSG_EVT_SYS_WIFI_SIGNAL_WEAK:
         case MSG_EVT_SYS_WIFI_SIGNAL_LEVEL:
+        case MSG_EVT_SYS_WIFI_SCAN_STARTED:
         case MSG_EVT_SYS_WIFI_SCAN_AP_FOUND:
         case MSG_EVT_SYS_WIFI_SCAN_DONE:
         case MSG_EVT_SYS_WIFI_SCAN_FAILED:

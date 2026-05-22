@@ -164,7 +164,7 @@ static void panel_apply_orientation(uint8_t orientation)
     if(I80_LCD_BGR_ORDER) madctl |= LCD_MADCTL_BGR;
     panel_write_data(LCD_CMD_MADCTL, &madctl, 1);
 
-    LOG("orientation=%u (MADCTL=0x%02X)", (unsigned)ori, madctl);
+    // LOG("orientation=%u (MADCTL=0x%02X)", (unsigned)ori, madctl);
 }
 
 static void ili9341_init_sequence(void)
@@ -397,7 +397,7 @@ void lcd_test_color(void)
 
 esp_err_t lcd_i80_8_init(void)
 {
-    LOG("LCD INIT START");
+    // LOG("LCD INIT START");
 
     if(backlight_init() != ESP_OK) return ESP_FAIL;
 
@@ -470,16 +470,16 @@ esp_err_t lcd_i80_8_init(void)
     vTaskDelay(pdMS_TO_TICKS(120));
 
     if(CONFIG_LCD_PANEL_CTRL == 0) {
-        LOG("panel init: ILI9341");
+        // LOG("panel init: ILI9341");
         ili9341_init_sequence();
     } else if(CONFIG_LCD_PANEL_CTRL == 1) {
-        LOG("panel init: ST7798/ST7796S");
+        // LOG("panel init: ST7798/ST7796S");
         st7798_init_sequence();
     } else {
-        LOG("invalid CONFIG_LCD_PANEL_CTRL=%d", CONFIG_LCD_PANEL_CTRL);
+        // LOG("invalid CONFIG_LCD_PANEL_CTRL=%d", CONFIG_LCD_PANEL_CTRL);
         return ESP_FAIL;
     }
 
-    LOG("LCD INIT DONE (pclk=%dHz)", I80_PCLK_HZ);
+    // LOG("LCD INIT DONE (pclk=%dHz)", I80_PCLK_HZ);
     return ESP_OK;
 }

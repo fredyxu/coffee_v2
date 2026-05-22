@@ -12,7 +12,7 @@ void ui_style_init(void);
 void ui_style_init_row(lv_style_t *s);
 void ui_style_init_column(lv_style_t *s);
 
-void ui_style_insert_line_1(lv_obj_t *obj);
+lv_obj_t *ui_style_insert_line_1(lv_obj_t *obj);
 
 #ifdef __cplusplus
 }

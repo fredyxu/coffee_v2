@@ -9,6 +9,7 @@ extern "C" {
 
 typedef struct {
 	void (*on_input)(const msg_t *msg);
+	void (*on_msg)(const msg_t *msg);
 } ui_page_ops_t;
 
 

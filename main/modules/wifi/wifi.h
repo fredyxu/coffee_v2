@@ -31,6 +31,8 @@ typedef struct {
     int rssi;		// 信号强度
     uint32_t ip;	// 获取的IP
     uint16_t ap_count;	// 获取到的AP数量
+    uint8_t authmode;	// WiFi认证类型
+    uint8_t channel;	// WiFi信道
     char ssid[33];	// SSID名称
 } wifi_module_event_t;
 

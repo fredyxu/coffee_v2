@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include "core/msg/msg.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,15 +26,17 @@ typedef enum {
 } settings_set_type_t;
 
 typedef enum {
-    SETTINGS_VALUE_TYPE_NONE = 0,
-    SETTINGS_VALUE_TYPE_TEXT,
-    SETTINGS_VALUE_TYPE_PASSWORD,
-    SETTINGS_VALUE_TYPE_INT,
-    SETTINGS_VALUE_TYPE_FLOAT,
+    SETTINGS_VALUE_TYPE_TEXT = 0,
     SETTINGS_VALUE_TYPE_BOOL,
-    SETTINGS_VALUE_TYPE_SELECT,
+    SETTINGS_VALUE_TYPE_INT,
     SETTINGS_VALUE_TYPE_LIST,
+    SETTINGS_VALUE_TYPE_PASSWORD,
+    SETTINGS_VALUE_TYPE_ACTION,
 } settings_value_type_t;
+
+typedef struct settings_sub_item_t settings_sub_item_t;
+typedef void (*settings_action_cb_t)(const settings_sub_item_t *item);
+typedef void (*settings_change_cb_t)(const settings_sub_item_t *item);
 
 typedef enum {
     SETTINGS_PAGE_WIFI = 0,
@@ -53,10 +56,13 @@ typedef struct {
 } settings_item_t;
 
 typedef enum {
-    SETTINGS_SUB_ITEM_ID_WIFI_SSID = 0,
+	SETTINGS_SUB_ITEM_ID_BACK = 0,
+	
+    SETTINGS_SUB_ITEM_ID_WIFI_SSID,
     SETTINGS_SUB_ITEM_ID_WIFI_PASSWORD,
     SETTINGS_SUB_ITEM_ID_WIFI_ENABLE,
     SETTINGS_SUB_ITEM_ID_WIFI_SSID_LIST,
+	SETTINGS_SUB_ITEM_ID_WIFI_SCAN,
 
     SETTINGS_SUB_ITEM_ID_AUDIO_VOLUME,
     SETTINGS_SUB_ITEM_ID_AUDIO_TONE,
@@ -70,26 +76,42 @@ typedef enum {
 
 } settings_value_swich_t;
 
+typedef enum {
+    SETTINGS_LIST_ITEM_NORMAL = 0,
+    SETTINGS_LIST_ITEM_STATUS,
+} settings_list_item_type_t;
+
 typedef struct {
     char title[33];
     int value_int;
+    bool disabled;
+    settings_list_item_type_t type;
 } settings_value_list_t;
 
-typedef struct {
+struct settings_sub_item_t {
     settings_sub_item_id_t id;
     settings_value_type_t value_type;
 
     const char *title;
-	const char *remark;
+    const char *subtitle;
 
     void *value;
-    void *value_list;
-	size_t *value_count;
 
     int min_value;
     int max_value;
     int step;
-} settings_sub_item_t;
+
+    settings_value_list_t *value_list;
+    size_t *value_count;
+    size_t value_list_max;
+
+    bool has_cmd_event;
+    msg_event_t cmd_event;
+    int cmd_value;
+
+    settings_action_cb_t on_action;
+    settings_change_cb_t on_change;
+};
 
 
 

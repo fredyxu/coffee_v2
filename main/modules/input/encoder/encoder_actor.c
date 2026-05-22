@@ -223,7 +223,7 @@ esp_err_t encoder_actor_init(void)
         goto fail;
     }
 
-    LOG("encoder actor init done (A=%d B=%d SW=%d)", s_ctx.pin_a, s_ctx.pin_b, s_ctx.pin_sw);
+    // LOG("encoder actor init done (A=%d B=%d SW=%d)", s_ctx.pin_a, s_ctx.pin_b, s_ctx.pin_sw);
     return ESP_OK;
 
 fail:

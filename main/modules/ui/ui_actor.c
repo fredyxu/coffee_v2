@@ -7,6 +7,7 @@
 #include "core/msg/msg.h"
 #include "core/msg/msg_sub.h"
 #include "core/utils/log.h"
+#include "modules/ui/adapter/lvgl_port.h"
 
 static const ui_page_ops_t *s_page_ops = NULL;
 
@@ -21,14 +22,41 @@ typedef struct {
 
 static ui_actor_ctx_t s_ui_actor = {0};
 
+typedef struct {
+	const ui_page_ops_t *ops;
+	const msg_t *msg;
+} ui_actor_input_ctx_t;
+
+static void ui_actor_dispatch_input(void *arg)
+{
+	ui_actor_input_ctx_t *ctx = (ui_actor_input_ctx_t *)arg;
+	if(ctx == NULL || ctx->ops == NULL || ctx->msg == NULL) {
+		return;
+	}
+
+	if(ctx->msg->type == MSG_TYPE_INPUT && ctx->ops->on_input != NULL) {
+		ctx->ops->on_input(ctx->msg);
+		return;
+	}
+
+	if(ctx->ops->on_msg != NULL) {
+		ctx->ops->on_msg(ctx->msg);
+	}
+}
+
 static void ui_actor_handle_msg(const msg_t *msg)
 {
-    if(msg == NULL || msg->type != MSG_TYPE_INPUT) {
+    if(msg == NULL) {
         return;
     }
 
-	if(s_page_ops != NULL && s_page_ops->on_input != NULL) {
-		s_page_ops->on_input(msg);
+	const ui_page_ops_t *ops = s_page_ops;
+	if(ops != NULL && (ops->on_input != NULL || ops->on_msg != NULL)) {
+		ui_actor_input_ctx_t ctx = {
+			.ops = ops,
+			.msg = msg,
+		};
+		lvgl_port_run(ui_actor_dispatch_input, &ctx);
 	}
 }
 
@@ -60,6 +88,7 @@ static esp_err_t ui_actor_subscribe(void)
 
     const msg_topic_t topics[] = {
         MSG_TOPIC_ENCODER_INPUT,
+        MSG_TOPIC_WIFI_EVENT,
     };
     esp_err_t err = msg_sub(s_ui_actor.inbox_q, topics, sizeof(topics) / sizeof(topics[0]), &s_ui_actor.sub);
     if(err != ESP_OK && queue_created) {

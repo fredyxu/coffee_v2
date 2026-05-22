@@ -26,7 +26,7 @@ static void ui_style_init_common(lv_style_t *s) {
 void ui_style_init_row(lv_style_t *s) {
     ui_style_init_common(s);
     lv_style_set_flex_flow(s, LV_FLEX_FLOW_ROW);
-	lv_style_set_flex_main_place(s, LV_FLEX_ALIGN_START);
+	lv_style_set_flex_main_place(s, LV_FLEX_ALIGN_SPACE_BETWEEN);
 	lv_style_set_flex_cross_place(s, LV_FLEX_ALIGN_CENTER);
 	lv_style_set_flex_track_place(s, LV_FLEX_ALIGN_CENTER);
 }
@@ -39,9 +39,10 @@ void ui_style_init_column(lv_style_t *s) {
 	lv_style_set_flex_track_place(s, LV_FLEX_ALIGN_CENTER);
 }
 
-void ui_style_insert_line_1(lv_obj_t *obj) {
+lv_obj_t *ui_style_insert_line_1(lv_obj_t *obj) {
     lv_obj_t *line = lv_obj_create(obj);
     lv_obj_add_style(line, &style_line_1, 0);
+	return line;
 }
 
 void page_body_style_init(void) {
@@ -91,4 +92,3 @@ void ui_style_init(void) {
 
     style_init_done = true;
 }
-

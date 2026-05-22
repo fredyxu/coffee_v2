@@ -167,7 +167,7 @@ esp_err_t lvgl_port_init(esp_lcd_panel_io_handle_t io)
         return ESP_OK;
     }
 
-    LOG("LVGL PORT INIT START");
+    // LOG("LVGL PORT INIT START");
     s_io = io;
 
     s_lock = xSemaphoreCreateMutex();
@@ -255,12 +255,12 @@ esp_err_t lvgl_port_init(esp_lcd_panel_io_handle_t io)
         return ESP_FAIL;
     }
 
-    LOG("LVGL PORT INIT DONE (res=%dx%d, buf_lines=%d, buf=%u, max_tx=%u)",
-             DISPLAY_H_RES,
-             DISPLAY_V_RES,
-             LVGL_DRAW_BUF_LINES,
-             (unsigned)s_dma.buf_size,
-             (unsigned)s_dma.max_transfer_bytes);
+    // LOG("LVGL PORT INIT DONE (res=%dx%d, buf_lines=%d, buf=%u, max_tx=%u)",
+    //          DISPLAY_H_RES,
+    //          DISPLAY_V_RES,
+    //          LVGL_DRAW_BUF_LINES,
+    //          (unsigned)s_dma.buf_size,
+    //          (unsigned)s_dma.max_transfer_bytes);
 	
 
 	

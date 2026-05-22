@@ -157,7 +157,7 @@ esp_err_t audio_actor_init(void)
         return ESP_FAIL;
     }
 
-    LOG("audio actor init done (bclk=%d ws=%d dout=%d)", PIN_SOUND_I2S_BCLK, PIN_SOUND_I2S_WS, PIN_SOUND_I2S_DOUT);
+    // LOG("audio actor init done (bclk=%d ws=%d dout=%d)", PIN_SOUND_I2S_BCLK, PIN_SOUND_I2S_WS, PIN_SOUND_I2S_DOUT);
     return ESP_OK;
 }
 

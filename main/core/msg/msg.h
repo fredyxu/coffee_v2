@@ -40,6 +40,7 @@ typedef enum {
 	MSG_SRC_LVGL,
 	MSG_SRC_WIFI,
 	MSG_SRC_APP_INIT,
+	MSG_SRC_UI,
 } msg_src_t;
 
 /*
@@ -81,10 +82,18 @@ typedef enum {
 	MSG_EVT_CMD_UI_UPDATE_TEXT,
 	MSG_EVT_CMD_UI_SCROLL,
 	MSG_EVT_CMD_UI_NAV_STEP,
+	MSG_EVT_CMD_UI_PAGE_GO_BACK,
 	
 	MSG_EVT_CMD_AUDIO_TONE,
 	MSG_EVT_CMD_AUDIO_STOP,
 	MSG_EVT_CMD_AUDIO_VOLUME_STEP,
+
+	MSG_EVT_CMD_WIFI_START,
+	MSG_EVT_CMD_WIFI_STOP,
+	MSG_EVT_CMD_WIFI_SCAN,
+	MSG_EVT_CMD_WIFI_CONNECT,
+	MSG_EVT_CMD_WIFI_DISCONNECT,
+	MSG_EVT_CMD_WIFI_SET_CREDENTIALS,
 
 	MSG_EVT_SYS_INIT_DONE_LCD,
 	MSG_EVT_SYS_INIT_DONE_LVGL,
@@ -98,6 +107,7 @@ typedef enum {
 	MSG_EVT_SYS_WIFI_DISCONNECTED,
 	MSG_EVT_SYS_WIFI_SIGNAL_WEAK,
 	MSG_EVT_SYS_WIFI_SIGNAL_LEVEL,
+	MSG_EVT_SYS_WIFI_SCAN_STARTED,
 	MSG_EVT_SYS_WIFI_SCAN_AP_FOUND,
 	MSG_EVT_SYS_WIFI_SCAN_DONE,
 	MSG_EVT_SYS_WIFI_SCAN_FAILED,
@@ -134,6 +144,18 @@ typedef struct {
 	union {
 		int value;
 		char text[64];
+
+		struct {
+			char ssid[33];
+			int rssi;
+			uint8_t authmode;
+			uint8_t channel;
+		} wifi_ap;
+
+		struct {
+			char ssid[33];
+			char password[65];
+		} wifi_credentials;
 
 		struct {
 			int freq;
@@ -229,6 +251,13 @@ esp_err_t msg_send_input_value(msg_src_t src,
 							   msg_event_t event,
 							   int value,
 							   TickType_t timeout_ticks);
+
+esp_err_t msg_send_cmd(const msg_t *msg, TickType_t timeout_ticks);
+
+esp_err_t msg_send_cmd_value(msg_src_t src,
+							 msg_event_t event,
+							 int value,
+							 TickType_t timeout_ticks);
 
 /**
  * @brief 发布一条 SYS 消息。

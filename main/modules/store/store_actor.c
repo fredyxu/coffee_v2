@@ -88,7 +88,7 @@ esp_err_t store_actor_init(void)
         return ESP_FAIL;
     }
 
-    LOG("store actor init done");
+    // LOG("store actor init done");
     return ESP_OK;
 }
 

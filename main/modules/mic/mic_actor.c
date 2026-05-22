@@ -146,7 +146,7 @@ esp_err_t mic_actor_init(void)
         return ESP_FAIL;
     }
 
-    LOG("mic actor init done");
+    // LOG("mic actor init done");
     return ESP_OK;
 }
 

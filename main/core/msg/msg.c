@@ -35,6 +35,34 @@ esp_err_t msg_send_input_value(msg_src_t src,
 }
 
 /*
+ * 发布 CMD 消息。
+ *
+ * 命令消息同样走自动 topic 映射。UI、状态机等模块只需要构造具体
+ * MSG_EVT_CMD_*，由订阅系统把命令投递给对应 actor。
+ */
+esp_err_t msg_send_cmd(const msg_t *msg, TickType_t timeout_ticks)
+{
+    if(msg == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    return msg_publish_auto(msg, timeout_ticks);
+}
+
+/*
+ * 构造并发送带整数 payload 的 CMD 消息。
+ */
+esp_err_t msg_send_cmd_value(msg_src_t src,
+                             msg_event_t event,
+                             int value,
+                             TickType_t timeout_ticks)
+{
+    msg_t msg = msg_make(src, MSG_TYPE_CMD, event, (uint32_t)xTaskGetTickCount());
+    msg.data.value = value;
+    return msg_send_cmd(&msg, timeout_ticks);
+}
+
+/*
  * 发布 SYS 消息。
  *
  * 与 msg_send_input() 一样，topic 由 msg_publish_auto() 根据 event 推导。

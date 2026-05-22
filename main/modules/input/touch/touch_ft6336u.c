@@ -170,7 +170,7 @@ static esp_err_t ft_probe(void)
     uint8_t chip_id = 0;
     err = ft_read_regs(FT_REG_ID_G_CHIPID, &chip_id, 1);
     if(err == ESP_OK) {
-        LOG("chip id: 0x%02X", chip_id);
+        // LOG("chip id: 0x%02X", chip_id);
     } else {
         LOG("read CHIPID failed: %s", esp_err_to_name(err));
     }
@@ -178,7 +178,7 @@ static esp_err_t ft_probe(void)
     uint8_t firm_id = 0;
     err = ft_read_regs(FT_REG_ID_G_FIRMID, &firm_id, 1);
     if(err == ESP_OK) {
-        LOG("firmware id: 0x%02X", firm_id);
+        // LOG("firmware id: 0x%02X", firm_id);
     } else {
         LOG("read FIRMID failed: %s", esp_err_to_name(err));
     }
@@ -186,7 +186,7 @@ static esp_err_t ft_probe(void)
     uint8_t cipher = 0;
     err = ft_read_regs(FT_REG_ID_G_CIPHER, &cipher, 1);
     if(err == ESP_OK) {
-        LOG("cipher: 0x%02X", cipher);
+        // LOG("cipher: 0x%02X", cipher);
     } else {
         LOG("read CIPHER failed: %s", esp_err_to_name(err));
     }
@@ -195,12 +195,12 @@ static esp_err_t ft_probe(void)
     err = ft_read_regs(FT_REG_ID_G_LIB_VERSION_H, lib_ver, 2);
     if(err == ESP_OK) {
         uint16_t ver = ((uint16_t)lib_ver[0] << 8) | lib_ver[1];
-        LOG("lib version: 0x%04X", ver);
+        // LOG("lib version: 0x%04X", ver);
     } else {
         LOG("read LIB_VERSION failed: %s", esp_err_to_name(err));
     }
 
-    LOG("probe ok, TD_STATUS=0x%02X", td_status);
+    // LOG("probe ok, TD_STATUS=0x%02X", td_status);
     return ESP_OK;
 }
 
@@ -338,9 +338,9 @@ esp_err_t touch_ft6336u_init(void)
     }
 
     s_inited = true;
-    LOG(
-             "touch inited: addr=0x%02X sda=%d scl=%d int=%d rst=%d",
-             FT6336U_ADDR, g_touch_pin_sda, g_touch_pin_scl, g_touch_pin_int, g_touch_pin_rst);
+    // LOG(
+    //          "touch inited: addr=0x%02X sda=%d scl=%d int=%d rst=%d",
+    //          FT6336U_ADDR, g_touch_pin_sda, g_touch_pin_scl, g_touch_pin_int, g_touch_pin_rst);
 
     return ESP_OK;
 }
@@ -391,9 +391,9 @@ esp_err_t touch_ft6336u_set_orientation(uint8_t orientation, lv_display_t *disp)
     touch_ft6336u_set_resolution(h, v);
     touch_ft6336u_set_transform(cfg->swap_xy, cfg->mirror_x, cfg->mirror_y);
     touch_ft6336u_set_offset(cfg->offset_x, cfg->offset_y);
-    LOG("orientation=%u swap=%d mx=%d my=%d ofs=%d,%d res=%d,%d",
-             (unsigned)ori, (int)cfg->swap_xy, (int)cfg->mirror_x, (int)cfg->mirror_y,
-             (int)cfg->offset_x, (int)cfg->offset_y, (int)h, (int)v);
+    // LOG("orientation=%u swap=%d mx=%d my=%d ofs=%d,%d res=%d,%d",
+    //          (unsigned)ori, (int)cfg->swap_xy, (int)cfg->mirror_x, (int)cfg->mirror_y,
+    //          (int)cfg->offset_x, (int)cfg->offset_y, (int)h, (int)v);
     return ESP_OK;
 }
 

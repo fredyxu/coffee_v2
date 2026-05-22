@@ -3,32 +3,24 @@
 #include <stdbool.h>
 #include <string.h>
 
+#include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
 
 #include "config/config_sys.h"
 #include "core/msg/msg.h"
+#include "core/msg/msg_sub.h"
 #include "core/utils/log.h"
 #include "modules/store/store_actor.h"
 #include "modules/wifi/wifi.h"
+#include "modules/wifi/wifi_scan_cache.h"
+#include "modules/wifi/wifi_settings.h"
 
-typedef enum {
-    WIFI_ACTOR_CMD_START,
-    WIFI_ACTOR_CMD_STOP,
-    WIFI_ACTOR_CMD_CONNECT,
-    WIFI_ACTOR_CMD_DISCONNECT,
-    WIFI_ACTOR_CMD_SCAN,
-    WIFI_ACTOR_CMD_SET_CREDENTIALS,
-} wifi_actor_cmd_type_t;
+#define WIFI_ACTOR_INBOX_Q_LEN 8
 
 typedef struct {
-    wifi_actor_cmd_type_t type;
-    char ssid[33];
-    char password[65];
-} wifi_actor_cmd_t;
-
-typedef struct {
-    QueueHandle_t cmd_q;
+    QueueHandle_t inbox_q;
+    msg_sub_handle_t sub;
     TaskHandle_t task;
     bool weak_reported;
     int last_signal_level;
@@ -66,17 +58,34 @@ static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
         case WIFI_MOD_EVT_STA_DISCONNECTED:
             (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_DISCONNECTED, event->reason, 0);
             break;
-        case WIFI_MOD_EVT_SCAN_AP_FOUND:
-            (void)msg_send_sys_text(
-				MSG_SRC_WIFI, 
-				MSG_EVT_SYS_WIFI_SCAN_AP_FOUND, 
-				event->ssid, 
-				0);
+        case WIFI_MOD_EVT_SCAN_AP_FOUND: {
+            wifi_scan_ap_t ap = {
+                .rssi = event->rssi,
+                .authmode = event->authmode,
+                .channel = event->channel,
+            };
+            (void)strncpy(ap.ssid, event->ssid, sizeof(ap.ssid) - 1);
+            ap.ssid[sizeof(ap.ssid) - 1] = '\0';
+            (void)wifi_scan_cache_add(&ap);
+            wifi_settings_ssid_add_ap(&ap);
+
+            msg_t msg = msg_make(MSG_SRC_WIFI, MSG_TYPE_SYS, MSG_EVT_SYS_WIFI_SCAN_AP_FOUND, (uint32_t)xTaskGetTickCount());
+            (void)strncpy(msg.data.wifi_ap.ssid, ap.ssid, sizeof(msg.data.wifi_ap.ssid) - 1);
+            msg.data.wifi_ap.ssid[sizeof(msg.data.wifi_ap.ssid) - 1] = '\0';
+            msg.data.wifi_ap.rssi = ap.rssi;
+            msg.data.wifi_ap.authmode = ap.authmode;
+            msg.data.wifi_ap.channel = ap.channel;
+            (void)msg_send_sys(&msg, 0);
             break;
+        }
         case WIFI_MOD_EVT_SCAN_DONE:
+            if(event->ap_count == 0) {
+                wifi_settings_ssid_set_empty_result();
+            }
             (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_DONE, event->ap_count, 0);
             break;
         case WIFI_MOD_EVT_SCAN_FAILED:
+            wifi_settings_ssid_set_status("扫描失败");
             (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_FAILED, event->reason, 0);
             break;
         default:
@@ -101,44 +110,52 @@ wifi_actor_config_t wifi_actor_default_config(void)
     return cfg;
 }
 
-static esp_err_t wifi_actor_post_cmd(const wifi_actor_cmd_t *cmd, TickType_t timeout_ticks)
+static void wifi_actor_apply_msg(const msg_t *msg)
 {
-    if(s_actor.cmd_q == NULL || cmd == NULL) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    return (xQueueSend(s_actor.cmd_q, cmd, timeout_ticks) == pdTRUE) ? ESP_OK : ESP_ERR_TIMEOUT;
-}
-
-static void wifi_actor_apply_cmd(const wifi_actor_cmd_t *cmd)
-{
-    if(cmd == NULL) {
+    if(msg == NULL || msg->type != MSG_TYPE_CMD) {
         return;
     }
 
-    switch(cmd->type) {
-        case WIFI_ACTOR_CMD_START:
+    switch(msg->event) {
+        case MSG_EVT_CMD_WIFI_START:
             (void)wifi_module_start();
             break;
-        case WIFI_ACTOR_CMD_STOP:
+        case MSG_EVT_CMD_WIFI_STOP:
             (void)wifi_module_stop();
             break;
-        case WIFI_ACTOR_CMD_CONNECT:
+        case MSG_EVT_CMD_WIFI_CONNECT:
             (void)wifi_module_connect();
             break;
-        case WIFI_ACTOR_CMD_DISCONNECT:
+        case MSG_EVT_CMD_WIFI_DISCONNECT:
             (void)wifi_module_disconnect();
             break;
-        case WIFI_ACTOR_CMD_SCAN: {
+        case MSG_EVT_CMD_WIFI_SCAN: {
+            wifi_scan_cache_clear();
+            wifi_settings_ssid_set_status("扫描中...");
+            (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_STARTED, 1, 0);
             esp_err_t err = wifi_module_scan();
             if(err != ESP_OK) {
+                wifi_settings_ssid_set_status("扫描失败");
                 (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_FAILED, (int)err, 0);
             }
             break;
         }
-        case WIFI_ACTOR_CMD_SET_CREDENTIALS:
-            (void)wifi_module_set_credentials(cmd->ssid, cmd->password);
+        case MSG_EVT_CMD_WIFI_SET_CREDENTIALS: {
+            (void)wifi_module_set_credentials(msg->data.wifi_credentials.ssid, msg->data.wifi_credentials.password);
+
+            store_wifi_settings_t save = {
+                .ssid = "",
+                .password = "",
+                .auto_reconnect = WIFI_AUTO_RECONNECT != 0,
+                .weak_rssi_threshold = WIFI_WEAK_RSSI_THRESHOLD,
+            };
+            (void)strncpy(save.ssid, msg->data.wifi_credentials.ssid, sizeof(save.ssid) - 1);
+            save.ssid[sizeof(save.ssid) - 1] = '\0';
+            (void)strncpy(save.password, msg->data.wifi_credentials.password, sizeof(save.password) - 1);
+            save.password[sizeof(save.password) - 1] = '\0';
+            (void)store_actor_save_wifi(&save, 0);
             break;
+        }
         default:
             break;
     }
@@ -178,15 +195,39 @@ static void wifi_actor_task(void *arg)
 {
     (void)arg;
 
-    wifi_actor_cmd_t cmd;
+    msg_t msg;
 
     while(1) {
-        if(xQueueReceive(s_actor.cmd_q, &cmd, WIFI_ACTOR_LOOP_TICKS) == pdTRUE) {
-            wifi_actor_apply_cmd(&cmd);
+        if(xQueueReceive(s_actor.inbox_q, &msg, WIFI_ACTOR_LOOP_TICKS) == pdTRUE) {
+            wifi_actor_apply_msg(&msg);
         }
 
         wifi_actor_poll_signal_quality();
     }
+}
+
+static esp_err_t wifi_actor_subscribe(void)
+{
+    bool queue_created = false;
+
+    if(s_actor.inbox_q == NULL) {
+        esp_err_t err = msg_actor_queue_create_with_len(WIFI_ACTOR_INBOX_Q_LEN, &s_actor.inbox_q);
+        if(err != ESP_OK) {
+            return err;
+        }
+        queue_created = true;
+    }
+
+    const msg_topic_t topics[] = {
+        MSG_TOPIC_WIFI_CMD,
+    };
+    esp_err_t err = msg_sub(s_actor.inbox_q, topics, sizeof(topics) / sizeof(topics[0]), &s_actor.sub);
+    if(err != ESP_OK && queue_created) {
+        vQueueDelete(s_actor.inbox_q);
+        s_actor.inbox_q = NULL;
+    }
+
+    return err;
 }
 
 esp_err_t wifi_actor_init(void)
@@ -224,10 +265,10 @@ esp_err_t wifi_actor_init(void)
 
     (void)wifi_module_register_event_callback(wifi_actor_wifi_event_cb, NULL);
 
-    s_actor.cmd_q = xQueueCreate(8, sizeof(wifi_actor_cmd_t));
-    if(s_actor.cmd_q == NULL) {
+    err = wifi_actor_subscribe();
+    if(err != ESP_OK) {
         (void)wifi_module_deinit();
-        return ESP_ERR_NO_MEM;
+        return err;
     }
 
     s_actor.weak_reported = false;
@@ -245,18 +286,20 @@ esp_err_t wifi_actor_init(void)
     );
 
     if(ok != pdPASS) {
-        vQueueDelete(s_actor.cmd_q);
-        s_actor.cmd_q = NULL;
+        (void)msg_unsub(s_actor.sub, NULL, 0);
+        s_actor.sub = MSG_SUB_HANDLE_INVALID;
+        vQueueDelete(s_actor.inbox_q);
+        s_actor.inbox_q = NULL;
         (void)wifi_module_deinit();
         return ESP_FAIL;
     }
 
-    (void)wifi_actor_start(0);
+    (void)wifi_module_start();
     if(cfg.ssid[0] != '\0') {
-        (void)wifi_actor_connect(0);
+        (void)wifi_module_connect();
     }
 
-    LOG("wifi actor init done");
+    // LOG("wifi actor init done");
     return ESP_OK;
 }
 
@@ -267,91 +310,17 @@ esp_err_t wifi_actor_deinit(void)
         s_actor.task = NULL;
     }
 
-    if(s_actor.cmd_q != NULL) {
-        vQueueDelete(s_actor.cmd_q);
-        s_actor.cmd_q = NULL;
+    if(s_actor.sub != MSG_SUB_HANDLE_INVALID) {
+        (void)msg_unsub(s_actor.sub, NULL, 0);
+        s_actor.sub = MSG_SUB_HANDLE_INVALID;
+    }
+
+    if(s_actor.inbox_q != NULL) {
+        vQueueDelete(s_actor.inbox_q);
+        s_actor.inbox_q = NULL;
     }
 
     s_actor.weak_reported = false;
     s_actor.last_signal_level = 0;
     return wifi_module_deinit();
-}
-
-esp_err_t wifi_actor_start(TickType_t timeout_ticks)
-{
-    wifi_actor_cmd_t cmd = {
-        .type = WIFI_ACTOR_CMD_START,
-    };
-    return wifi_actor_post_cmd(&cmd, timeout_ticks);
-}
-
-esp_err_t wifi_actor_stop(TickType_t timeout_ticks)
-{
-    wifi_actor_cmd_t cmd = {
-        .type = WIFI_ACTOR_CMD_STOP,
-    };
-    return wifi_actor_post_cmd(&cmd, timeout_ticks);
-}
-
-esp_err_t wifi_actor_connect(TickType_t timeout_ticks)
-{
-    wifi_actor_cmd_t cmd = {
-        .type = WIFI_ACTOR_CMD_CONNECT,
-    };
-    return wifi_actor_post_cmd(&cmd, timeout_ticks);
-}
-
-esp_err_t wifi_actor_disconnect(TickType_t timeout_ticks)
-{
-    wifi_actor_cmd_t cmd = {
-        .type = WIFI_ACTOR_CMD_DISCONNECT,
-    };
-    return wifi_actor_post_cmd(&cmd, timeout_ticks);
-}
-
-esp_err_t wifi_actor_scan(TickType_t timeout_ticks)
-{
-    wifi_actor_cmd_t cmd = {
-        .type = WIFI_ACTOR_CMD_SCAN,
-    };
-    return wifi_actor_post_cmd(&cmd, timeout_ticks);
-}
-
-esp_err_t wifi_actor_set_credentials(const char *ssid, const char *password, TickType_t timeout_ticks)
-{
-    if(ssid == NULL || password == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    if(strlen(ssid) >= sizeof(((wifi_actor_cmd_t *)0)->ssid) || strlen(password) >= sizeof(((wifi_actor_cmd_t *)0)->password)) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    wifi_actor_cmd_t cmd = {
-        .type = WIFI_ACTOR_CMD_SET_CREDENTIALS,
-    };
-
-    (void)strncpy(cmd.ssid, ssid, sizeof(cmd.ssid) - 1);
-    cmd.ssid[sizeof(cmd.ssid) - 1] = '\0';
-    (void)strncpy(cmd.password, password, sizeof(cmd.password) - 1);
-    cmd.password[sizeof(cmd.password) - 1] = '\0';
-
-    esp_err_t err = wifi_actor_post_cmd(&cmd, timeout_ticks);
-    if(err != ESP_OK) {
-        return err;
-    }
-
-    store_wifi_settings_t save = {
-        .ssid = "",
-        .password = "",
-        .auto_reconnect = WIFI_AUTO_RECONNECT != 0,
-        .weak_rssi_threshold = WIFI_WEAK_RSSI_THRESHOLD,
-    };
-    (void)strncpy(save.ssid, cmd.ssid, sizeof(save.ssid) - 1);
-    save.ssid[sizeof(save.ssid) - 1] = '\0';
-    (void)strncpy(save.password, cmd.password, sizeof(save.password) - 1);
-    save.password[sizeof(save.password) - 1] = '\0';
-    (void)store_actor_save_wifi(&save, 0);
-
-    return ESP_OK;
 }
