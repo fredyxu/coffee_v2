@@ -1,4 +1,4 @@
-#include "modules/wifi/wifi_settings.h"
+#include "wifi_settings.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -23,6 +23,22 @@ static void wifi_settings_set_item(settings_value_list_t *item,
 	item->value_int = value_int;
 	item->disabled = disabled;
 	item->type = type;
+}
+
+static settings_value_list_t *wifi_settings_find_ssid(const char *ssid)
+{
+	if(ssid == NULL || ssid[0] == '\0') {
+		return NULL;
+	}
+
+	for(size_t i = 0; i < s_wifi_ssid_count; i++) {
+		settings_value_list_t *item = &s_wifi_ssid_list[i];
+		if(item->type == SETTINGS_LIST_ITEM_NORMAL && strcmp(item->title, ssid) == 0) {
+			return item;
+		}
+	}
+
+	return NULL;
 }
 
 settings_value_list_t *wifi_settings_ssid_list(void)
@@ -61,12 +77,20 @@ void wifi_settings_ssid_set_status(const char *text)
 
 void wifi_settings_ssid_add_ap(const wifi_scan_ap_t *ap)
 {
-	if(ap == NULL) {
+	if(ap == NULL || ap->ssid[0] == '\0') {
 		return;
 	}
 
 	if(s_wifi_ssid_count == 1 && s_wifi_ssid_list[0].type == SETTINGS_LIST_ITEM_STATUS) {
 		wifi_settings_ssid_clear();
+	}
+
+	settings_value_list_t *existing = wifi_settings_find_ssid(ap->ssid);
+	if(existing != NULL) {
+		if(ap->rssi > existing->value_int) {
+			existing->value_int = ap->rssi;
+		}
+		return;
 	}
 
 	if(s_wifi_ssid_count >= WIFI_SETTINGS_SSID_MAX) {

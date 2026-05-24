@@ -4,6 +4,7 @@
 
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "app/app_settings.h"
 #include "config/config_pin.h"
 #include "config/config_sys.h"
 #include "core/msg/msg.h"
@@ -122,6 +123,7 @@ esp_err_t audio_actor_init(void)
     }
 
     audio_config_t cfg = audio_default_config();
+    cfg.volume_percent = (uint8_t)app_settings.audio_volume;
     esp_err_t err = audio_init(&cfg);
     if(err != ESP_OK) {
         LOG("audio_init failed: %s", esp_err_to_name(err));

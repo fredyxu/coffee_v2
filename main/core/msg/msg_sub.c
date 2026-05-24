@@ -157,6 +157,7 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
         case MSG_EVT_CMD_WIFI_SCAN:
         case MSG_EVT_CMD_WIFI_CONNECT:
         case MSG_EVT_CMD_WIFI_DISCONNECT:
+        case MSG_EVT_CMD_WIFI_SET_ENABLE:
         case MSG_EVT_CMD_WIFI_SET_CREDENTIALS:
             *out_topic = MSG_TOPIC_WIFI_CMD;
             return ESP_OK;

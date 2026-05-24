@@ -7,11 +7,11 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 
-#include "config/config_sys.h"
+#include "app/app_settings.h"
+#include "config/config_sys_task.h"
 #include "core/msg/msg.h"
 #include "core/msg/msg_sub.h"
 #include "core/utils/log.h"
-#include "modules/store/store_actor.h"
 #include "modules/wifi/wifi.h"
 #include "modules/wifi/wifi_scan_cache.h"
 #include "modules/wifi/wifi_settings.h"
@@ -23,6 +23,7 @@ typedef struct {
     msg_sub_handle_t sub;
     TaskHandle_t task;
     bool weak_reported;
+    bool connect_after_scan;
     int last_signal_level;
     int weak_rssi_threshold;
 } wifi_actor_ctx_t;
@@ -50,6 +51,8 @@ static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
     if(event == NULL) {
         return;
     }
+
+	// LOG("EVENT %d:", event->id);
 
     switch(event->id) {
         case WIFI_MOD_EVT_GOT_IP:
@@ -83,10 +86,18 @@ static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
                 wifi_settings_ssid_set_empty_result();
             }
             (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_DONE, event->ap_count, 0);
+            if(s_actor.connect_after_scan) {
+                s_actor.connect_after_scan = false;
+                (void)wifi_module_connect();
+            }
             break;
         case WIFI_MOD_EVT_SCAN_FAILED:
             wifi_settings_ssid_set_status("扫描失败");
             (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_FAILED, event->reason, 0);
+            if(s_actor.connect_after_scan) {
+                s_actor.connect_after_scan = false;
+                (void)wifi_module_connect();
+            }
             break;
         default:
             break;
@@ -99,15 +110,107 @@ static void wifi_actor_wifi_event_cb(const wifi_module_event_t *event, void *use
     wifi_actor_emit_sys_event(event);
 }
 
-wifi_actor_config_t wifi_actor_default_config(void)
+static esp_err_t wifi_actor_update_enable_setting(bool enable)
 {
-    wifi_actor_config_t cfg = {
-        .ssid = WIFI_STA_SSID,
-        .password = WIFI_STA_PASSWORD,
-        .auto_reconnect = (WIFI_AUTO_RECONNECT != 0),
-        .weak_rssi_threshold = WIFI_WEAK_RSSI_THRESHOLD,
-    };
-    return cfg;
+    return app_settings_update(&(app_settings_update_t) {
+        .id = APP_SETTING_ID_WIFI_ENABLE,
+        .value.b = enable,
+    });
+}
+
+static esp_err_t wifi_actor_update_credentials_setting(const char *ssid, const char *password)
+{
+    esp_err_t err = app_settings_update(&(app_settings_update_t) {
+        .id = APP_SETTING_ID_WIFI_SSID,
+        .value.str = ssid,
+    });
+    if(err != ESP_OK) {
+        return err;
+    }
+
+    return app_settings_update(&(app_settings_update_t) {
+        .id = APP_SETTING_ID_WIFI_PASSWORD,
+        .value.str = password,
+    });
+}
+
+static esp_err_t wifi_actor_scan_networks(void)
+{
+    if(!app_settings.wifi_enable) {
+        wifi_scan_cache_clear();
+        wifi_settings_ssid_set_status("WIFI已关闭");
+        (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_FAILED, ESP_ERR_INVALID_STATE, 0);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    wifi_scan_cache_clear();
+    wifi_settings_ssid_set_status("扫描中...");
+    (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_STARTED, 1, 0);
+
+    esp_err_t err = wifi_module_scan();
+    if(err != ESP_OK) {
+        wifi_settings_ssid_set_status("扫描失败");
+        (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_FAILED, (int)err, 0);
+    }
+
+    return err;
+}
+
+static esp_err_t wifi_actor_set_enable(bool enable)
+{
+    esp_err_t err = wifi_actor_update_enable_setting(enable);
+    if(err != ESP_OK) {
+        return err;
+    }
+
+    if(enable) {
+        err = wifi_module_start();
+        if(err != ESP_OK) {
+            return err;
+        }
+
+        if(app_settings.wifi_ssid[0] != '\0') {
+            (void)wifi_module_set_credentials(app_settings.wifi_ssid, app_settings.wifi_password);
+            s_actor.connect_after_scan = true;
+        } else {
+            s_actor.connect_after_scan = false;
+        }
+
+        err = wifi_actor_scan_networks();
+        if(err != ESP_OK && s_actor.connect_after_scan) {
+            s_actor.connect_after_scan = false;
+            (void)wifi_module_connect();
+        }
+        return ESP_OK;
+    }
+
+    s_actor.connect_after_scan = false;
+    (void)wifi_module_disconnect();
+    err = wifi_module_stop();
+    wifi_scan_cache_clear();
+    wifi_settings_ssid_clear();
+    (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_DONE, 0, 0);
+    return err;
+}
+
+static esp_err_t wifi_actor_set_credentials(const char *ssid, const char *password)
+{
+    esp_err_t err = wifi_actor_update_credentials_setting(ssid, password);
+    if(err != ESP_OK) {
+        return err;
+    }
+
+    err = wifi_module_set_credentials(app_settings.wifi_ssid, app_settings.wifi_password);
+    if(err != ESP_OK) {
+        return err;
+    }
+
+    if(app_settings.wifi_enable) {
+        (void)wifi_module_disconnect();
+        (void)wifi_module_connect();
+    }
+
+    return ESP_OK;
 }
 
 static void wifi_actor_apply_msg(const msg_t *msg)
@@ -121,6 +224,7 @@ static void wifi_actor_apply_msg(const msg_t *msg)
             (void)wifi_module_start();
             break;
         case MSG_EVT_CMD_WIFI_STOP:
+			LOG("MSG_EVT_CMD_WIFI_STOP");
             (void)wifi_module_stop();
             break;
         case MSG_EVT_CMD_WIFI_CONNECT:
@@ -129,33 +233,18 @@ static void wifi_actor_apply_msg(const msg_t *msg)
         case MSG_EVT_CMD_WIFI_DISCONNECT:
             (void)wifi_module_disconnect();
             break;
-        case MSG_EVT_CMD_WIFI_SCAN: {
-            wifi_scan_cache_clear();
-            wifi_settings_ssid_set_status("扫描中...");
-            (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_STARTED, 1, 0);
-            esp_err_t err = wifi_module_scan();
-            if(err != ESP_OK) {
-                wifi_settings_ssid_set_status("扫描失败");
-                (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_FAILED, (int)err, 0);
-            }
+        case MSG_EVT_CMD_WIFI_SET_ENABLE:
+            (void)wifi_actor_set_enable(msg->data.value != 0);
             break;
-        }
-        case MSG_EVT_CMD_WIFI_SET_CREDENTIALS: {
-            (void)wifi_module_set_credentials(msg->data.wifi_credentials.ssid, msg->data.wifi_credentials.password);
-
-            store_wifi_settings_t save = {
-                .ssid = "",
-                .password = "",
-                .auto_reconnect = WIFI_AUTO_RECONNECT != 0,
-                .weak_rssi_threshold = WIFI_WEAK_RSSI_THRESHOLD,
-            };
-            (void)strncpy(save.ssid, msg->data.wifi_credentials.ssid, sizeof(save.ssid) - 1);
-            save.ssid[sizeof(save.ssid) - 1] = '\0';
-            (void)strncpy(save.password, msg->data.wifi_credentials.password, sizeof(save.password) - 1);
-            save.password[sizeof(save.password) - 1] = '\0';
-            (void)store_actor_save_wifi(&save, 0);
+        case MSG_EVT_CMD_WIFI_SCAN:
+            (void)wifi_actor_scan_networks();
             break;
-        }
+        case MSG_EVT_CMD_WIFI_SET_CREDENTIALS:
+            (void)wifi_actor_set_credentials(
+                msg->data.wifi_credentials.ssid,
+                msg->data.wifi_credentials.password
+            );
+            break;
         default:
             break;
     }
@@ -236,26 +325,12 @@ esp_err_t wifi_actor_init(void)
         return ESP_OK;
     }
 
-    wifi_actor_config_t cfg = wifi_actor_default_config();
-    store_wifi_settings_t persisted = store_default_wifi_settings();
-    esp_err_t persisted_err = store_actor_load_wifi(&persisted);
-    if(persisted_err == ESP_OK) {
-        (void)strncpy(cfg.ssid, persisted.ssid, sizeof(cfg.ssid) - 1);
-        cfg.ssid[sizeof(cfg.ssid) - 1] = '\0';
-        (void)strncpy(cfg.password, persisted.password, sizeof(cfg.password) - 1);
-        cfg.password[sizeof(cfg.password) - 1] = '\0';
-        cfg.auto_reconnect = persisted.auto_reconnect;
-        cfg.weak_rssi_threshold = persisted.weak_rssi_threshold;
-    } else if(persisted_err != ESP_ERR_INVALID_STATE) {
-        LOG("store load wifi failed: %s", esp_err_to_name(persisted_err));
-    }
-
     wifi_module_config_t wifi_cfg = wifi_module_default_config();
-    (void)strncpy(wifi_cfg.ssid, cfg.ssid, sizeof(wifi_cfg.ssid) - 1);
+    (void)strncpy(wifi_cfg.ssid, app_settings.wifi_ssid, sizeof(wifi_cfg.ssid) - 1);
     wifi_cfg.ssid[sizeof(wifi_cfg.ssid) - 1] = '\0';
-    (void)strncpy(wifi_cfg.password, cfg.password, sizeof(wifi_cfg.password) - 1);
+    (void)strncpy(wifi_cfg.password, app_settings.wifi_password, sizeof(wifi_cfg.password) - 1);
     wifi_cfg.password[sizeof(wifi_cfg.password) - 1] = '\0';
-    wifi_cfg.auto_reconnect = cfg.auto_reconnect;
+    wifi_cfg.auto_reconnect = app_settings.wifi_auto_reconnect;
 
     esp_err_t err = wifi_module_init(&wifi_cfg);
     if(err != ESP_OK) {
@@ -272,8 +347,9 @@ esp_err_t wifi_actor_init(void)
     }
 
     s_actor.weak_reported = false;
+    s_actor.connect_after_scan = false;
     s_actor.last_signal_level = 0;
-    s_actor.weak_rssi_threshold = cfg.weak_rssi_threshold;
+    s_actor.weak_rssi_threshold = app_settings.wifi_weak_rssi_threshold;
 
     BaseType_t ok = xTaskCreatePinnedToCore(
         wifi_actor_task,
@@ -295,7 +371,7 @@ esp_err_t wifi_actor_init(void)
     }
 
     (void)wifi_module_start();
-    if(cfg.ssid[0] != '\0') {
+    if(app_settings.wifi_enable && app_settings.wifi_ssid[0] != '\0') {
         (void)wifi_module_connect();
     }
 
@@ -321,6 +397,7 @@ esp_err_t wifi_actor_deinit(void)
     }
 
     s_actor.weak_reported = false;
+    s_actor.connect_after_scan = false;
     s_actor.last_signal_level = 0;
     return wifi_module_deinit();
 }

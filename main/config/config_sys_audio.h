@@ -11,10 +11,10 @@
 /* 扬声器输出参数 */
 #define SOUND_SAMPLE_RATE 44100
 #define SOUND_BITS_PER_SAMPLE 16
-/* 约定值：1=Mono, 2=Stereo（当前实现走 Mono） */
+/* 约定值：1=Mono, 2=Stereo */
 #define SOUND_CHANNEL_FORMAT 1
 
-/* 麦克风采集参数（预留） */
+/* 麦克风采集参数 */
 #define MIC_SAMPLE_RATE 16000
 #define MIC_BITS_PER_SAMPLE 32
 /* 约定值：1=Mono, 2=Stereo */

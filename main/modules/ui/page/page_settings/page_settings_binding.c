@@ -1,8 +1,57 @@
 #include "modules/ui/page/page_settings/page_settings_binding.h"
 
+#include <stdint.h>
+
 #include "esp_err.h"
 #include "core/msg/msg.h"
 #include "core/utils/log.h"
+
+static int binding_read_int(const settings_sub_item_t *item)
+{
+	if(item == NULL || item->value == NULL) {
+		return 0;
+	}
+
+	return (int)*(int32_t *)item->value;
+}
+
+static esp_err_t binding_write_bool(const settings_sub_item_t *item, bool value)
+{
+	if(item == NULL || item->value == NULL) {
+		return ESP_ERR_INVALID_ARG;
+	}
+
+	if(item->has_change_cmd_event) {
+		return msg_send_cmd_value(MSG_SRC_LVGL, item->change_cmd_event, value ? 1 : 0, 0);
+	}
+
+	if(item->has_setting_id) {
+		return app_settings_update(&(app_settings_update_t) {
+			.id = item->setting_id,
+			.value.b = value,
+		});
+	}
+
+	*(bool *)item->value = value;
+	return ESP_OK;
+}
+
+static esp_err_t binding_write_int(const settings_sub_item_t *item, int value)
+{
+	if(item == NULL || item->value == NULL) {
+		return ESP_ERR_INVALID_ARG;
+	}
+
+	if(item->has_setting_id) {
+		return app_settings_update(&(app_settings_update_t) {
+			.id = item->setting_id,
+			.value.i32 = value,
+		});
+	}
+
+	*(int32_t *)item->value = value;
+	return ESP_OK;
+}
 
 static void binding_adjust_int(page_settings_item_focus_item_t *focus, int step)
 {
@@ -38,11 +87,16 @@ static void binding_toggle_bool(page_settings_item_focus_item_t *focus)
 		return;
 	}
 
-	bool *value = (bool *)focus->item->value;
-	*value = !(*value);
-	focus->value_bool = *value;
+	const bool new_value = !focus->value_bool;
+	esp_err_t err = binding_write_bool(focus->item, new_value);
+	if(err != ESP_OK) {
+		LOG("settings bool update failed: id=%d err=%d", focus->item->id, err);
+		return;
+	}
 
-	if(*value) {
+	focus->value_bool = new_value;
+
+	if(new_value) {
 		lv_obj_add_state(focus->control, LV_STATE_CHECKED);
 	} else {
 		lv_obj_remove_state(focus->control, LV_STATE_CHECKED);
@@ -56,7 +110,7 @@ static void binding_begin_edit(page_settings_item_focus_item_t *focus)
 	}
 
 	if(focus->value_type == SETTINGS_VALUE_TYPE_INT && focus->item->value != NULL) {
-		focus->value_int = *(int *)focus->item->value;
+		focus->value_int = binding_read_int(focus->item);
 	}
 
 	page_settings_focus_set_status(OP_SELECTED);
@@ -73,7 +127,10 @@ static void binding_apply_edit(page_settings_item_focus_item_t *focus)
 	}
 
 	if(focus->value_type == SETTINGS_VALUE_TYPE_INT && focus->item->value != NULL) {
-		*(int *)focus->item->value = focus->value_int;
+		esp_err_t err = binding_write_int(focus->item, focus->value_int);
+		if(err != ESP_OK) {
+			LOG("settings int update failed: id=%d err=%d", focus->item->id, err);
+		}
 	}
 
 	page_settings_focus_set_status(OP_MENU);
@@ -90,7 +147,6 @@ static void binding_sync_int_from_slider(page_settings_item_focus_item_t *focus)
 	}
 
 	focus->value_int = (int)lv_slider_get_value(focus->control);
-	*(int *)focus->item->value = focus->value_int;
 
 	if(focus->value_label != NULL) {
 		lv_label_set_text_fmt(focus->value_label, "%d", focus->value_int);

@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include "app/app_settings.h"
 #include "core/msg/msg.h"
 
 #ifdef __cplusplus
@@ -101,6 +102,9 @@ struct settings_sub_item_t {
     int max_value;
     int step;
 
+    bool has_setting_id;
+    app_setting_id_t setting_id;
+
     settings_value_list_t *value_list;
     size_t *value_count;
     size_t value_list_max;
@@ -108,6 +112,9 @@ struct settings_sub_item_t {
     bool has_cmd_event;
     msg_event_t cmd_event;
     int cmd_value;
+
+    bool has_change_cmd_event;
+    msg_event_t change_cmd_event;
 
     settings_action_cb_t on_action;
     settings_change_cb_t on_change;

@@ -1,4 +1,5 @@
 #include "app_init.h"
+#include "app/app_settings.h"
 #include "core/utils/log.h"
 #include "esp_err.h"
 #include "core/msg/msg.h"
@@ -7,7 +8,6 @@
 #include "modules/input/encoder/encoder_actor.h"
 #include "modules/audio/audio_actor.h"
 #include "modules/mic/mic_actor.h"
-#include "modules/store/store_actor.h"
 #include "modules/wifi/wifi_actor.h"
 #include "modules/display/lcd_i80_8.h"
 #include "modules/ui/adapter/lvgl_port.h"
@@ -25,12 +25,20 @@ esp_err_t app_startup(void) {
 		return err;
 	}
 
+	// 初始化应用配置：先从 NVS 读取持久化配置，之后所有模块都直接读取 app_settings。
+	err = app_settings_init();
+	if(err != ESP_OK) {
+		LOG("APP_INIT: app settings init failed");
+		return err;
+	}
+
 	// 初始化LCD
 	err = lcd_i80_8_init();
 	if(err != ESP_OK) {
 		LOG("APP_INIT: LCD initialization failed");
 		return err;
 	}
+	(void)lcd_set_backlight((uint8_t)app_settings.display_brightness);
 	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "屏幕初始化完成.", 0);
 
 
@@ -59,14 +67,6 @@ esp_err_t app_startup(void) {
 		return err;
 	}
 	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "UI初始化完成.", 0);
-
-	// 初始化Store Actor
-	err = store_actor_init();
-	if(err != ESP_OK) {
-		LOG("APP_INIT: store actor init failed");
-		return err;
-	}
-	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "Store初始化完成.", 0);
 
 	// 初始化WiFi Actor
 	err = wifi_actor_init();

@@ -17,8 +17,8 @@
 
 #define UI_ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
-
-static page_id_t s_current_page = -1;
+static ui_nav_t ui_nav = {0};
+static ui_page_id_t s_current_page = -1;
 
 static lv_obj_t *screen;
 
@@ -26,12 +26,24 @@ static void ui_screen_init() {
 	screen = lv_scr_act();
 }
 
+static void ui_nav_push(ui_page_id_t page_id) {
+	if(s_current_page >= 0 && s_current_page < PAGE_NONE) {
+		if(ui_nav.depth < UI_ARRAY_SIZE(ui_nav.stack)) {
+			ui_nav.stack[ui_nav.depth++] = s_current_page;
+		} else {
+			LOG("导航栈已满，无法记录历史页面");
+		}
+	}
+}
+
+
+
 /**
  * @brief 切换当前页面
  * @param page_id 目标页面枚举
  * @return ESP_OK 成功，其他表示参数或状态有误
  */
-esp_err_t page_show(page_id_t page_id) {
+static esp_err_t page_show(ui_page_id_t page_id) {
 	ui_actor_clean_ops();
     if(page_id < PAGE_INIT || page_id > PAGE_NONE) {
         LOG("无效的页面 ID: %d", page_id);
@@ -66,7 +78,7 @@ esp_err_t page_show(page_id_t page_id) {
     default:
         return ESP_ERR_NOT_SUPPORTED;
     }
-    s_current_page = page_id;
+	s_current_page = page_id;
     return ESP_OK;
 }
 
@@ -77,7 +89,8 @@ static void ui_create(void *arg)
 {
 	ui_style_init();
 	ui_screen_init();
-	page_show(PAGE_SETTINGS_ITEM);
+	// page_show(PAGE_SETTINGS_ITEM);
+	ui_nav_go(PAGE_SETTINGS_ITEM);
 	// page_settings_item_show(screen, 0);
 }
 
@@ -94,33 +107,22 @@ esp_err_t ui_init(void)
 }
 
 
+void ui_nav_back(void) {
+	if(ui_nav.depth > 0) {
+		ui_page_id_t id = ui_nav.stack[--ui_nav.depth];
+		page_show(id);
+	} else {
+		LOG("导航栈已空，无法返回");
+	}
+}
 
+void ui_nav_go(ui_page_id_t id) {
+	ui_nav_push(id);
+	page_show(id);
+}
 
-// esp_err_t ui_page_init(lv_obj_t *p, lv_obj_t **s) {
-//     if(p == NULL || s == NULL) {
-//         return ESP_ERR_INVALID_ARG;
-//     }
-// 	lv_obj_clean(p);
-// 	*s = lv_obj_create(p);
-// 	lv_obj_set_size(*s, DISPLAY_H_RES, DISPLAY_V_RES);
-// 	lv_obj_set_layout(*s, LV_LAYOUT_FLEX);
-// 	lv_obj_set_flex_flow(*s, LV_FLEX_FLOW_COLUMN);
-// 	lv_obj_set_flex_align(*s, 
-// 							LV_FLEX_ALIGN_START,
-// 							LV_FLEX_ALIGN_CENTER,
-// 							LV_FLEX_ALIGN_START);
-	
-// 	// lv_obj_set_style_pad_row(*s, 0, 0);
-// 	// lv_obj_set_style_pad_column(*s, 0, 0);
-
-// 	lv_obj_set_style_border_width(*s, 0, LV_STATE_DEFAULT);
-// 	lv_obj_set_style_outline_width(*s, 0, LV_STATE_DEFAULT);
-// 	lv_obj_set_style_shadow_width(*s, 0, LV_STATE_DEFAULT);
-// 	lv_obj_remove_flag(*s, LV_OBJ_FLAG_SCROLLABLE);
-// 	lv_obj_set_style_radius(*s, 0, LV_STATE_DEFAULT);
-// 	lv_obj_set_style_pad_all(*s, 0, LV_STATE_DEFAULT);
-// 	lv_obj_set_style_margin_all(*s, 0, LV_STATE_DEFAULT);
-
-
-//     return ESP_OK;
-// }
+void ui_nav_back_action(const settings_sub_item_t *item)
+{
+    (void)item;
+    ui_nav_back();
+}

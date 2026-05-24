@@ -18,7 +18,9 @@
 
 static lv_obj_t *page_body;
 static lv_obj_t *s_keyboard;
+static char s_selected_wifi_ssid[33];
 static char s_wifi_password[65];
+static settings_item_id_t s_current_item_id;
 
 #define PAGE_SETTINGS_LIST_VIEW_MAX 8
 
@@ -86,10 +88,19 @@ static void wifi_password_keyboard_event_cb(ui_keyboard_event_t event, const cha
 	const char *ssid = (const char *)user_data;
 
 	switch(event) {
-		case UI_KEYBOARD_EVT_SUBMIT:
-			LOG("wifi password input submit (ssid=%s, len=%d)", ssid ? ssid : "", text ? (int)strlen(text) : 0);
+		case UI_KEYBOARD_EVT_SUBMIT: {
+			msg_t msg = msg_make(MSG_SRC_LVGL, MSG_TYPE_CMD, MSG_EVT_CMD_WIFI_SET_CREDENTIALS, 0);
+			(void)snprintf(msg.data.wifi_credentials.ssid, sizeof(msg.data.wifi_credentials.ssid), "%s", ssid ? ssid : "");
+			(void)snprintf(msg.data.wifi_credentials.password, sizeof(msg.data.wifi_credentials.password), "%s", text ? text : "");
+
+			esp_err_t err = msg_send_cmd(&msg, 0);
+			if(err != ESP_OK) {
+				LOG("wifi credentials cmd failed: err=%d", err);
+			}
+
 			s_keyboard = NULL;
 			break;
+		}
 
 		case UI_KEYBOARD_EVT_CANCEL:
 			LOG("wifi password input cancel");
@@ -126,17 +137,18 @@ static void focus_open_wifi_password_keyboard(page_settings_item_focus_item_t *f
 	}
 
 	const char *ssid = lv_label_get_text(focus->value_label);
+	(void)snprintf(s_selected_wifi_ssid, sizeof(s_selected_wifi_ssid), "%s", ssid ? ssid : "");
 	s_wifi_password[0] = '\0';
 
 	s_keyboard = ui_keyboard_modal_create(&(ui_keyboard_config_t) {
 		.parent = page_body ? page_body : lv_scr_act(),
-		.title = ssid,
+		.title = s_selected_wifi_ssid,
 		.placeholder = "请输入 WiFi 密码",
 		.buffer = s_wifi_password,
 		.buffer_size = sizeof(s_wifi_password),
 		.password_mode = true,
 		.on_event = wifi_password_keyboard_event_cb,
-		.user_data = (void *)ssid,
+		.user_data = s_selected_wifi_ssid,
 	});
 }
 
@@ -236,7 +248,7 @@ static void insert_settings_item_list(const settings_sub_item_t *item) {
 // **************************************************
 static void insert_settings_items() {
 	size_t sub_items_count = 0;
-    const settings_sub_item_t *sub_items = page_settings_get_sub_items(SETTINGS_ITEM_ID_WIFI, &sub_items_count);
+    const settings_sub_item_t *sub_items = page_settings_get_sub_items(s_current_item_id, &sub_items_count);
     for(size_t i = 0; i < sub_items_count; i++) {
 		switch (sub_items[i].value_type) {
 			// 插入文本项
@@ -309,6 +321,7 @@ void page_settings_item_show(lv_obj_t *p, settings_item_id_t id) {
     }
 	page_settings_focus_reset();
 	page_settings_focus_set_activate_cb(focus_activate_from_touch, NULL);
+	s_current_item_id = id;
 	s_keyboard = NULL;
 	list_views_reset();
     page_settings_item_style_init();
