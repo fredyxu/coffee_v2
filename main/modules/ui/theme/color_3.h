@@ -26,3 +26,28 @@
 #define UI_COLOR_BORDER					lv_color_hex(0x484F58)
 
 #define UI_COLOR_FOCUS_1				lv_color_hex(0x334963)
+
+#define UI_COLOR_KEYBOARD_OVERLAY		lv_color_hex(0x000000)
+#define UI_COLOR_KEYBOARD_PANEL			lv_color_hex(0x161B22)
+#define UI_COLOR_KEYBOARD_PANEL_BORDER	lv_color_hex(0x30363D)
+
+#define UI_COLOR_KEYBOARD_INPUT_BG		lv_color_hex(0x0D1117)
+#define UI_COLOR_KEYBOARD_INPUT_BORDER	lv_color_hex(0x3D4652)
+#define UI_COLOR_KEYBOARD_INPUT_TEXT	lv_color_hex(0xE6EDF3)
+#define UI_COLOR_KEYBOARD_PLACEHOLDER	lv_color_hex(0x8B949E)
+#define UI_COLOR_KEYBOARD_CURSOR		lv_color_hex(0x38BDF8)
+
+#define UI_COLOR_KEYBOARD_KEY_BG		lv_color_hex(0x21262D)
+#define UI_COLOR_KEYBOARD_KEY_BORDER	lv_color_hex(0x30363D)
+#define UI_COLOR_KEYBOARD_KEY_TEXT		lv_color_hex(0xE6EDF3)
+
+#define UI_COLOR_KEYBOARD_AUX_BG		lv_color_hex(0x2B333D)
+#define UI_COLOR_KEYBOARD_AUX_BORDER	lv_color_hex(0x4A5563)
+#define UI_COLOR_KEYBOARD_AUX_TEXT		lv_color_hex(0xD0D7DE)
+
+#define UI_COLOR_KEYBOARD_FOCUS_BG		lv_color_hex(0x334963)
+#define UI_COLOR_KEYBOARD_FOCUS_BORDER	lv_color_hex(0x38BDF8)
+#define UI_COLOR_KEYBOARD_FOCUS_TEXT	lv_color_hex(0xE6EDF3)
+
+#define UI_COLOR_KEYBOARD_PRESSED_BG	lv_color_hex(0x38BDF8)
+#define UI_COLOR_KEYBOARD_PRESSED_TEXT	lv_color_hex(0x0D1117)

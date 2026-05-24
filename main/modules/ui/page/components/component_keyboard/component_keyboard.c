@@ -7,7 +7,7 @@
 #include "modules/ui/theme/color.h"
 #include "modules/ui/theme/font.h"
 
-#define UI_KEYBOARD_BTN(width) (LV_BUTTONMATRIX_CTRL_POPOVER | (width))
+#define UI_KEYBOARD_BTN(width) (width)
 
 typedef struct {
     lv_obj_t *root;
@@ -167,21 +167,45 @@ static void keyboard_apply_selection_style(lv_obj_t *keyboard)
         return;
     }
 
+    lv_obj_set_style_bg_opa(keyboard, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(keyboard, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(keyboard, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(keyboard, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(keyboard, 3, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(keyboard, 3, LV_PART_MAIN);
+    lv_obj_set_style_anim_duration(keyboard, 0, LV_PART_MAIN);
+
     lv_obj_set_style_text_font(keyboard, UI_FONT_14, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(keyboard, UI_COLOR_BUTTON_TEXT, LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(keyboard, UI_COLOR_BUTTON, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(keyboard, UI_COLOR_KEYBOARD_KEY_TEXT, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(keyboard, UI_COLOR_KEYBOARD_KEY_BG, LV_PART_ITEMS);
     lv_obj_set_style_bg_opa(keyboard, LV_OPA_COVER, LV_PART_ITEMS);
     lv_obj_set_style_radius(keyboard, 4, LV_PART_ITEMS);
     lv_obj_set_style_border_width(keyboard, 1, LV_PART_ITEMS);
-    lv_obj_set_style_border_color(keyboard, UI_COLOR_BORDER, LV_PART_ITEMS);
+    lv_obj_set_style_border_color(keyboard, UI_COLOR_KEYBOARD_KEY_BORDER, LV_PART_ITEMS);
+    lv_obj_set_style_anim_duration(keyboard, 0, LV_PART_ITEMS);
 
-    lv_obj_set_style_bg_color(keyboard, UI_COLOR_ACCENT, LV_PART_ITEMS | LV_STATE_FOCUSED);
-    lv_obj_set_style_text_color(keyboard, UI_COLOR_TEXT_DARK, LV_PART_ITEMS | LV_STATE_FOCUSED);
+    lv_obj_set_style_bg_color(keyboard, UI_COLOR_KEYBOARD_AUX_BG, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(keyboard, UI_COLOR_KEYBOARD_AUX_TEXT, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_border_width(keyboard, 1, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_border_color(keyboard, UI_COLOR_KEYBOARD_AUX_BORDER, LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_anim_duration(keyboard, 0, LV_PART_ITEMS | LV_STATE_CHECKED);
+
+    lv_obj_set_style_bg_color(keyboard, UI_COLOR_KEYBOARD_FOCUS_BG, LV_PART_ITEMS | LV_STATE_FOCUSED);
+    lv_obj_set_style_text_color(keyboard, UI_COLOR_KEYBOARD_FOCUS_TEXT, LV_PART_ITEMS | LV_STATE_FOCUSED);
     lv_obj_set_style_border_width(keyboard, 2, LV_PART_ITEMS | LV_STATE_FOCUSED);
-    lv_obj_set_style_border_color(keyboard, UI_COLOR_TEXT, LV_PART_ITEMS | LV_STATE_FOCUSED);
+    lv_obj_set_style_border_color(keyboard, UI_COLOR_KEYBOARD_FOCUS_BORDER, LV_PART_ITEMS | LV_STATE_FOCUSED);
+    lv_obj_set_style_anim_duration(keyboard, 0, LV_PART_ITEMS | LV_STATE_FOCUSED);
 
-    lv_obj_set_style_bg_color(keyboard, UI_COLOR_BUTTON_PRESSED, LV_PART_ITEMS | LV_STATE_PRESSED);
-    lv_obj_set_style_text_color(keyboard, UI_COLOR_BUTTON_TEXT, LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(keyboard, UI_COLOR_KEYBOARD_FOCUS_BG, LV_PART_ITEMS | LV_STATE_CHECKED | LV_STATE_FOCUSED);
+    lv_obj_set_style_text_color(keyboard, UI_COLOR_KEYBOARD_FOCUS_TEXT, LV_PART_ITEMS | LV_STATE_CHECKED | LV_STATE_FOCUSED);
+    lv_obj_set_style_border_width(keyboard, 2, LV_PART_ITEMS | LV_STATE_CHECKED | LV_STATE_FOCUSED);
+    lv_obj_set_style_border_color(keyboard, UI_COLOR_KEYBOARD_FOCUS_BORDER, LV_PART_ITEMS | LV_STATE_CHECKED | LV_STATE_FOCUSED);
+    lv_obj_set_style_anim_duration(keyboard, 0, LV_PART_ITEMS | LV_STATE_CHECKED | LV_STATE_FOCUSED);
+
+    lv_obj_set_style_bg_color(keyboard, UI_COLOR_KEYBOARD_PRESSED_BG, LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(keyboard, UI_COLOR_KEYBOARD_PRESSED_TEXT, LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(keyboard, UI_COLOR_KEYBOARD_FOCUS_BORDER, LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_anim_duration(keyboard, 0, LV_PART_ITEMS | LV_STATE_PRESSED);
 }
 
 static void keyboard_apply_ascii_maps(lv_obj_t *keyboard)
@@ -427,8 +451,8 @@ lv_obj_t *ui_keyboard_modal_create(const ui_keyboard_config_t *cfg)
     lv_obj_add_flag(root, LV_OBJ_FLAG_FLOATING);
     lv_obj_set_size(root, LV_PCT(100), LV_PCT(100));
     lv_obj_align(root, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_bg_color(root, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_bg_opa(root, LV_OPA_60, 0);
+    lv_obj_set_style_bg_color(root, UI_COLOR_KEYBOARD_OVERLAY, 0);
+    lv_obj_set_style_bg_opa(root, LV_OPA_50, 0);
     lv_obj_set_style_border_width(root, 0, 0);
     lv_obj_set_style_pad_all(root, 0, 0);
     lv_obj_set_style_radius(root, 0, 0);
@@ -440,12 +464,14 @@ lv_obj_t *ui_keyboard_modal_create(const ui_keyboard_config_t *cfg)
     ctx->panel = panel;
     lv_obj_set_width(panel, LV_PCT(100));
     lv_obj_set_height(panel, LV_PCT(82));
-    lv_obj_set_style_bg_color(panel, UI_COLOR_PANEL_2, 0);
+    lv_obj_set_style_bg_color(panel, UI_COLOR_KEYBOARD_PANEL, 0);
     lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(panel, 0, 0);
+    lv_obj_set_style_border_width(panel, 1, 0);
+    lv_obj_set_style_border_side(panel, LV_BORDER_SIDE_TOP, 0);
+    lv_obj_set_style_border_color(panel, UI_COLOR_KEYBOARD_PANEL_BORDER, 0);
     lv_obj_set_style_radius(panel, 0, 0);
-    lv_obj_set_style_pad_all(panel, 8, 0);
-    lv_obj_set_style_pad_row(panel, 8, 0);
+    lv_obj_set_style_pad_all(panel, 5, 0);
+    lv_obj_set_style_pad_row(panel, 5, 0);
     lv_obj_set_layout(panel, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
@@ -457,7 +483,14 @@ lv_obj_t *ui_keyboard_modal_create(const ui_keyboard_config_t *cfg)
     lv_obj_set_width(ta, LV_PCT(95));
     lv_obj_set_height(ta, 42);
     lv_obj_set_style_text_font(ta, UI_FONT_14, 0);
-    lv_obj_set_style_text_color(ta, UI_COLOR_TEXT_DARK, 0);
+    lv_obj_set_style_bg_color(ta, UI_COLOR_KEYBOARD_INPUT_BG, 0);
+    lv_obj_set_style_bg_opa(ta, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(ta, 1, 0);
+    lv_obj_set_style_border_color(ta, UI_COLOR_KEYBOARD_INPUT_BORDER, 0);
+    lv_obj_set_style_radius(ta, 4, 0);
+    lv_obj_set_style_text_color(ta, UI_COLOR_KEYBOARD_INPUT_TEXT, 0);
+    lv_obj_set_style_text_color(ta, UI_COLOR_KEYBOARD_PLACEHOLDER, LV_PART_TEXTAREA_PLACEHOLDER);
+    lv_obj_set_style_bg_color(ta, UI_COLOR_KEYBOARD_CURSOR, LV_PART_CURSOR);
     lv_textarea_set_one_line(ta, true);
     lv_textarea_set_password_mode(ta, cfg->password_mode);
     lv_textarea_set_placeholder_text(ta, cfg->placeholder ? cfg->placeholder : "");
@@ -476,6 +509,7 @@ lv_obj_t *ui_keyboard_modal_create(const ui_keyboard_config_t *cfg)
     keyboard_apply_ascii_maps(kb);
     lv_obj_set_width(kb, LV_PCT(100));
     lv_obj_set_flex_grow(kb, 1);
+    lv_obj_remove_flag(kb, LV_OBJ_FLAG_SCROLLABLE);
     keyboard_apply_selection_style(kb);
     lv_obj_add_state(kb, LV_STATE_FOCUSED);
     lv_obj_add_event_cb(kb, keyboard_event_cb, LV_EVENT_VALUE_CHANGED, ctx);
@@ -492,7 +526,7 @@ void ui_keyboard_modal_close(lv_obj_t *modal)
         return;
     }
 
-    lv_obj_delete(modal);
+    lv_obj_delete_async(modal);
 }
 
 const char *ui_keyboard_get_text(lv_obj_t *modal)
