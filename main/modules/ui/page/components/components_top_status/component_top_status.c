@@ -32,6 +32,27 @@ static lv_style_t style_icon_label;
 
 static bool style_inited = false;
 
+void ui_top_status_handle_sys_msg(const msg_t *msg)
+{
+    if(msg == NULL || msg->type != MSG_TYPE_SYS) {
+        return;
+    }
+
+    switch(msg->event) {
+        case MSG_EVT_SYS_WIFI_CONNECTED:
+        case MSG_EVT_SYS_WIFI_DISCONNECTED:
+        case MSG_EVT_SYS_WIFI_SIGNAL_LEVEL:
+        case MSG_EVT_SYS_WS_CONNECTED:
+        case MSG_EVT_SYS_WS_DISCONNECTED:
+        case MSG_EVT_SYS_WS_HEARTBEAT_LOST:
+            ui_top_status_ref_icon();
+            break;
+
+        default:
+            break;
+    }
+}
+
 void ui_top_status_ref_icon(void) {
     if(obj_icon_wifi == NULL || obj_icon_link == NULL) {
         return;
@@ -42,15 +63,23 @@ void ui_top_status_ref_icon(void) {
         return;
     }
 
-    if(!cur.wifi_connected || cur.wifi_level <= 1) {
-        lv_label_set_text(label_icon_wifi, ICON_WIFI_1);
-    } else if(cur.wifi_level == 2) {
-        lv_label_set_text(label_icon_wifi, ICON_WIFI_2);
-    } else if(cur.wifi_level == 3) {
-        lv_label_set_text(label_icon_wifi, ICON_WIFI_3);
-    } else {
-        lv_label_set_text(label_icon_wifi, ICON_WIFI_FULL);
-    }
+	if(cur.wifi_connected) {
+		// lv_label_set_text(label_icon_wifi, ICON_WIFI_FULL);
+		if(cur.wifi_level < 1) {
+			lv_label_set_text(label_icon_wifi, ICON_WIFI_NO);
+		} else if(cur.wifi_level == 1) {
+			lv_label_set_text(label_icon_wifi, ICON_WIFI_1);
+		} else if(cur.wifi_level == 2) {
+			lv_label_set_text(label_icon_wifi, ICON_WIFI_2);
+		} else if(cur.wifi_level == 3) {
+			lv_label_set_text(label_icon_wifi, ICON_WIFI_3);
+		} else {
+			lv_label_set_text(label_icon_wifi, ICON_WIFI_FULL);
+		}
+	} else {
+		lv_label_set_text(label_icon_wifi, ICON_WIFI_NO);
+	}
+	
 
     lv_obj_set_style_text_opa(label_icon_link, cur.ws_connected ? LV_OPA_100 : LV_OPA_40, 0);
 }
@@ -172,13 +201,26 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 	lv_obj_add_style(label_status, &style_icon_label, 0);
 	lv_label_set_text(label_status, "●");
 	lv_obj_center(label_status);
-	// lv_obj_set_style_pad_left(obj_status, 5, 0);
-	// lv_label_set_text(obj_status, "●");
-	// lv_obj_set_style_text_font(obj_status, UI_FONT_12, 0);
-	// lv_obj_set_style_text_color(obj_status, UI_COLOR_ACCENT, 0);
 
-    
-	// ui_top_status_ref_icon();
 
 	return ESP_OK;
+}
+
+
+void ui_top_status_set_wifi_signal(int level) {
+	if(label_icon_wifi == NULL) {
+		return;
+	}
+
+	if(level <= 0) {
+		lv_label_set_text(label_icon_wifi, ICON_WIFI_NO);
+	} else if(level == 1) {
+		lv_label_set_text(label_icon_wifi, ICON_WIFI_1);
+	} else if(level == 2) {
+		lv_label_set_text(label_icon_wifi, ICON_WIFI_2);
+	} else if(level == 3) {
+		lv_label_set_text(label_icon_wifi, ICON_WIFI_3);
+	} else {
+		lv_label_set_text(label_icon_wifi, ICON_WIFI_FULL);
+	}
 }

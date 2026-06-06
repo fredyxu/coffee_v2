@@ -6,6 +6,32 @@
 #include "modules/ui/theme/color.h"
 #include "modules/ui/theme/font.h"
 
+static settings_value_list_t *settings_list_items(const settings_sub_item_t *item)
+{
+	if(item == NULL) {
+		return NULL;
+	}
+
+	if(item->value_source != NULL) {
+		return item->value_source->list;
+	}
+
+	return NULL;
+}
+
+static size_t *settings_list_count(const settings_sub_item_t *item)
+{
+	if(item == NULL) {
+		return NULL;
+	}
+
+	if(item->value_source != NULL) {
+		return item->value_source->count;
+	}
+
+	return NULL;
+}
+
 lv_obj_t *page_settings_renderer_create_list_container(lv_obj_t *parent)
 {
 	lv_obj_t *container = lv_obj_create(parent);
@@ -24,8 +50,11 @@ lv_obj_t *page_settings_renderer_create_list_container(lv_obj_t *parent)
 
 lv_obj_t *page_settings_renderer_insert_list_row(lv_obj_t *parent,
 												 const settings_sub_item_t *item,
+												 const settings_value_list_t *list_item,
 												 const char *title,
+												 const char *value_str,
 												 bool disabled,
+												 bool selected,
 												 size_t focus_index)
 {
 	lv_obj_t *obj_body = lv_obj_create(parent);
@@ -34,9 +63,14 @@ lv_obj_t *page_settings_renderer_insert_list_row(lv_obj_t *parent,
 
 	page_settings_item_apply_style_page_item_list(
 		obj_body,
-		obj_title_label
+		obj_title_label,
+		selected
 	);
-	page_settings_focus_add_at(item, obj_body, NULL, obj_title_label, disabled, focus_index);
+	if(list_item != NULL) {
+		page_settings_focus_add_list_at(item, list_item, obj_body, obj_title_label, disabled, focus_index);
+	} else {
+		page_settings_focus_add_at(item, obj_body, NULL, obj_title_label, value_str, disabled, focus_index);
+	}
 
 	if(disabled) {
 		lv_obj_clear_flag(obj_body, LV_OBJ_FLAG_CLICKABLE);
@@ -47,17 +81,22 @@ lv_obj_t *page_settings_renderer_insert_list_row(lv_obj_t *parent,
 
 void page_settings_renderer_insert_static_list(lv_obj_t *parent, const settings_sub_item_t *item)
 {
-	if(item == NULL || item->value_list == NULL || item->value_count == NULL) {
+	settings_value_list_t *value_list = settings_list_items(item);
+	size_t *value_count = settings_list_count(item);
+	if(item == NULL || value_list == NULL || value_count == NULL) {
 		return;
 	}
 
-	for(size_t i = 0; i < *item->value_count; i++) {
-		settings_value_list_t *value_info = (settings_value_list_t *)item->value_list + i;
+	for(size_t i = 0; i < *value_count; i++) {
+		settings_value_list_t *value_info = value_list + i;
 		(void)page_settings_renderer_insert_list_row(
 			parent,
 			item,
+			value_info,
 			value_info->title,
+			value_info->value_str,
 			value_info->disabled,
+			value_info->selected,
 			page_settings_focus_count()
 		);
 	}
@@ -70,7 +109,16 @@ void page_settings_renderer_insert_action(lv_obj_t *parent, const settings_sub_i
 		return;
 	}
 
-	(void)page_settings_renderer_insert_list_row(parent, item, item->title, false, page_settings_focus_count());
+	(void)page_settings_renderer_insert_list_row(
+		parent,
+		item,
+		NULL,
+		item->title,
+		NULL,
+		false,
+		false,
+		page_settings_focus_count()
+	);
 	ui_style_insert_line_1(parent);
 }
 

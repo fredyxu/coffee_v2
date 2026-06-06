@@ -106,7 +106,6 @@ typedef enum {
 	
 	MSG_EVT_SYS_WIFI_CONNECTED,
 	MSG_EVT_SYS_WIFI_DISCONNECTED,
-	MSG_EVT_SYS_WIFI_SIGNAL_WEAK,
 	MSG_EVT_SYS_WIFI_SIGNAL_LEVEL,
 	MSG_EVT_SYS_WIFI_SCAN_STARTED,
 	MSG_EVT_SYS_WIFI_SCAN_AP_FOUND,
@@ -287,7 +286,7 @@ esp_err_t msg_send_sys(const msg_t *msg, TickType_t timeout_ticks);
  *
  * 用法：
  * @code
- * (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SIGNAL_WEAK, rssi, 0);
+ * (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SIGNAL_LEVEL, level, 0);
  * @endcode
  *
  * @param src 消息来源模块。

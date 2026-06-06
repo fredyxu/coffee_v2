@@ -243,8 +243,6 @@ esp_err_t state_handle_sys(const msg_t *sys_msg,
             return state_emit_ui_text_cmd(sys_msg, "[WIFI] CONNECTED", out_msgs, out_cap, out_count);
         case MSG_EVT_SYS_WIFI_DISCONNECTED:
             return state_emit_ui_text_cmd(sys_msg, "[WIFI] DISCONNECTED", out_msgs, out_cap, out_count);
-        case MSG_EVT_SYS_WIFI_SIGNAL_WEAK:
-            return state_emit_ui_text_cmd(sys_msg, "[WIFI] SIGNAL WEAK", out_msgs, out_cap, out_count);
         case MSG_EVT_SYS_WS_CONNECTED:
             return state_emit_ui_text_cmd(sys_msg, "[WS] CONNECTED", out_msgs, out_cap, out_count);
         case MSG_EVT_SYS_WS_DISCONNECTED:

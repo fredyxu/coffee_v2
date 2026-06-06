@@ -17,13 +17,22 @@
 #include "modules/wifi/wifi_settings.h"
 
 #define WIFI_ACTOR_INBOX_Q_LEN 8
+#define WIFI_ACTOR_CONNECT_TIMEOUT_TICKS pdMS_TO_TICKS(15000)
+
+typedef enum {
+    WIFI_ACTOR_CONN_IDLE = 0,
+    WIFI_ACTOR_CONN_CONNECTING,
+    WIFI_ACTOR_CONN_CONNECTED,
+    WIFI_ACTOR_CONN_DISCONNECTING,
+} wifi_actor_conn_state_t;
 
 typedef struct {
     QueueHandle_t inbox_q;
     msg_sub_handle_t sub;
     TaskHandle_t task;
-    bool weak_reported;
-    bool connect_after_scan;
+    wifi_actor_conn_state_t conn_state;
+    bool connect_after_disconnect;
+    TickType_t connect_deadline;
     int last_signal_level;
     int weak_rssi_threshold;
 } wifi_actor_ctx_t;
@@ -31,6 +40,11 @@ typedef struct {
 static wifi_actor_ctx_t s_actor = {0};
 
 static const TickType_t WIFI_ACTOR_LOOP_TICKS = pdMS_TO_TICKS(500);
+
+static bool wifi_actor_tick_reached(TickType_t now, TickType_t deadline)
+{
+    return (int32_t)(now - deadline) >= 0;
+}
 
 static int wifi_actor_calc_signal_level(int rssi, int weak_threshold)
 {
@@ -46,6 +60,83 @@ static int wifi_actor_calc_signal_level(int rssi, int weak_threshold)
     return 4;
 }
 
+static esp_err_t wifi_actor_request_connect(void)
+{
+    if(!app_settings.wifi_enable) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if(s_actor.conn_state == WIFI_ACTOR_CONN_CONNECTED ||
+       s_actor.conn_state == WIFI_ACTOR_CONN_CONNECTING) {
+        return ESP_OK;
+    }
+
+    if(s_actor.conn_state == WIFI_ACTOR_CONN_DISCONNECTING) {
+        s_actor.connect_after_disconnect = true;
+        return ESP_OK;
+    }
+
+    esp_err_t err = wifi_module_connect();
+    if(err == ESP_OK) {
+        s_actor.conn_state = WIFI_ACTOR_CONN_CONNECTING;
+        s_actor.connect_deadline = xTaskGetTickCount() + WIFI_ACTOR_CONNECT_TIMEOUT_TICKS;
+        return ESP_OK;
+    }
+
+    s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
+    s_actor.connect_after_disconnect = false;
+    s_actor.connect_deadline = 0;
+    LOG("wifi connect request failed: %s", esp_err_to_name(err));
+    return err;
+}
+
+static esp_err_t wifi_actor_request_disconnect(bool connect_after_disconnect)
+{
+    s_actor.connect_after_disconnect = connect_after_disconnect;
+    s_actor.connect_deadline = 0;
+
+    if(s_actor.conn_state == WIFI_ACTOR_CONN_IDLE) {
+        return connect_after_disconnect ? wifi_actor_request_connect() : ESP_OK;
+    }
+
+    if(s_actor.conn_state == WIFI_ACTOR_CONN_DISCONNECTING) {
+        return ESP_OK;
+    }
+
+    s_actor.conn_state = WIFI_ACTOR_CONN_DISCONNECTING;
+    esp_err_t err = wifi_module_disconnect();
+    if(err == ESP_OK) {
+        return ESP_OK;
+    }
+
+    s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
+    LOG("wifi disconnect request failed: %s", esp_err_to_name(err));
+    return connect_after_disconnect ? wifi_actor_request_connect() : err;
+}
+
+static void wifi_actor_handle_connect_failed(int reason, bool abort_driver)
+{
+    LOG("wifi connect failed: reason=%d", reason);
+    s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
+    s_actor.connect_after_disconnect = false;
+    s_actor.connect_deadline = 0;
+    s_actor.last_signal_level = 0;
+    if(abort_driver) {
+        (void)wifi_module_disconnect();
+    }
+}
+
+static void wifi_actor_check_connect_timeout(void)
+{
+    if(s_actor.conn_state != WIFI_ACTOR_CONN_CONNECTING || s_actor.connect_deadline == 0) {
+        return;
+    }
+
+    if(wifi_actor_tick_reached(xTaskGetTickCount(), s_actor.connect_deadline)) {
+        wifi_actor_handle_connect_failed(ESP_ERR_TIMEOUT, true);
+    }
+}
+
 static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
 {
     if(event == NULL) {
@@ -56,10 +147,26 @@ static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
 
     switch(event->id) {
         case WIFI_MOD_EVT_GOT_IP:
+            s_actor.conn_state = WIFI_ACTOR_CONN_CONNECTED;
+            s_actor.connect_after_disconnect = false;
+            s_actor.connect_deadline = 0;
+            wifi_settings_ssid_refresh_connected();
             (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_CONNECTED, 1, 0);
             break;
         case WIFI_MOD_EVT_STA_DISCONNECTED:
+            if(s_actor.conn_state == WIFI_ACTOR_CONN_CONNECTING) {
+                wifi_actor_handle_connect_failed(event->reason, false);
+            } else {
+                s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
+                s_actor.connect_deadline = 0;
+                s_actor.last_signal_level = 0;
+            }
+            wifi_settings_ssid_refresh_connected();
             (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_DISCONNECTED, event->reason, 0);
+            if(s_actor.connect_after_disconnect) {
+                s_actor.connect_after_disconnect = false;
+                (void)wifi_actor_request_connect();
+            }
             break;
         case WIFI_MOD_EVT_SCAN_AP_FOUND: {
             wifi_scan_ap_t ap = {
@@ -71,6 +178,7 @@ static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
             ap.ssid[sizeof(ap.ssid) - 1] = '\0';
             (void)wifi_scan_cache_add(&ap);
             wifi_settings_ssid_add_ap(&ap);
+            wifi_settings_ssid_refresh_connected();
 
             msg_t msg = msg_make(MSG_SRC_WIFI, MSG_TYPE_SYS, MSG_EVT_SYS_WIFI_SCAN_AP_FOUND, (uint32_t)xTaskGetTickCount());
             (void)strncpy(msg.data.wifi_ap.ssid, ap.ssid, sizeof(msg.data.wifi_ap.ssid) - 1);
@@ -85,19 +193,12 @@ static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
             if(event->ap_count == 0) {
                 wifi_settings_ssid_set_empty_result();
             }
+            wifi_settings_ssid_refresh_connected();
             (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_DONE, event->ap_count, 0);
-            if(s_actor.connect_after_scan) {
-                s_actor.connect_after_scan = false;
-                (void)wifi_module_connect();
-            }
             break;
         case WIFI_MOD_EVT_SCAN_FAILED:
             wifi_settings_ssid_set_status("扫描失败");
             (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_FAILED, event->reason, 0);
-            if(s_actor.connect_after_scan) {
-                s_actor.connect_after_scan = false;
-                (void)wifi_module_connect();
-            }
             break;
         default:
             break;
@@ -169,24 +270,15 @@ static esp_err_t wifi_actor_set_enable(bool enable)
             return err;
         }
 
-        if(app_settings.wifi_ssid[0] != '\0') {
-            (void)wifi_module_set_credentials(app_settings.wifi_ssid, app_settings.wifi_password);
-            s_actor.connect_after_scan = true;
-        } else {
-            s_actor.connect_after_scan = false;
-        }
-
         err = wifi_actor_scan_networks();
-        if(err != ESP_OK && s_actor.connect_after_scan) {
-            s_actor.connect_after_scan = false;
-            (void)wifi_module_connect();
-        }
         return ESP_OK;
     }
 
-    s_actor.connect_after_scan = false;
-    (void)wifi_module_disconnect();
+    s_actor.connect_after_disconnect = false;
+    s_actor.connect_deadline = 0;
+    (void)wifi_actor_request_disconnect(false);
     err = wifi_module_stop();
+    s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
     wifi_scan_cache_clear();
     wifi_settings_ssid_clear();
     (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_DONE, 0, 0);
@@ -206,8 +298,7 @@ static esp_err_t wifi_actor_set_credentials(const char *ssid, const char *passwo
     }
 
     if(app_settings.wifi_enable) {
-        (void)wifi_module_disconnect();
-        (void)wifi_module_connect();
+        return wifi_actor_request_disconnect(true);
     }
 
     return ESP_OK;
@@ -225,13 +316,17 @@ static void wifi_actor_apply_msg(const msg_t *msg)
             break;
         case MSG_EVT_CMD_WIFI_STOP:
 			LOG("MSG_EVT_CMD_WIFI_STOP");
+            s_actor.connect_after_disconnect = false;
+            s_actor.connect_deadline = 0;
+            (void)wifi_actor_request_disconnect(false);
             (void)wifi_module_stop();
+            s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
             break;
         case MSG_EVT_CMD_WIFI_CONNECT:
-            (void)wifi_module_connect();
+            (void)wifi_actor_request_connect();
             break;
         case MSG_EVT_CMD_WIFI_DISCONNECT:
-            (void)wifi_module_disconnect();
+            (void)wifi_actor_request_disconnect(false);
             break;
         case MSG_EVT_CMD_WIFI_SET_ENABLE:
             (void)wifi_actor_set_enable(msg->data.value != 0);
@@ -253,8 +348,7 @@ static void wifi_actor_apply_msg(const msg_t *msg)
 static void wifi_actor_poll_signal_quality(void)
 {
     int rssi = 0;
-    if(!wifi_module_is_connected()) {
-        s_actor.weak_reported = false;
+    if(s_actor.conn_state != WIFI_ACTOR_CONN_CONNECTED || !wifi_module_is_connected()) {
         s_actor.last_signal_level = 0;
         return;
     }
@@ -268,16 +362,6 @@ static void wifi_actor_poll_signal_quality(void)
         s_actor.last_signal_level = level;
         (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SIGNAL_LEVEL, level, 0);
     }
-
-    if(level == 1) {
-        if(!s_actor.weak_reported) {
-            s_actor.weak_reported = true;
-            (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SIGNAL_WEAK, rssi, 0);
-        }
-        return;
-    }
-
-    s_actor.weak_reported = false;
 }
 
 static void wifi_actor_task(void *arg)
@@ -291,6 +375,7 @@ static void wifi_actor_task(void *arg)
             wifi_actor_apply_msg(&msg);
         }
 
+        wifi_actor_check_connect_timeout();
         wifi_actor_poll_signal_quality();
     }
 }
@@ -346,9 +431,10 @@ esp_err_t wifi_actor_init(void)
         return err;
     }
 
-    s_actor.weak_reported = false;
-    s_actor.connect_after_scan = false;
     s_actor.last_signal_level = 0;
+    s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
+    s_actor.connect_after_disconnect = false;
+    s_actor.connect_deadline = 0;
     s_actor.weak_rssi_threshold = app_settings.wifi_weak_rssi_threshold;
 
     BaseType_t ok = xTaskCreatePinnedToCore(
@@ -370,9 +456,8 @@ esp_err_t wifi_actor_init(void)
         return ESP_FAIL;
     }
 
-    (void)wifi_module_start();
-    if(app_settings.wifi_enable && app_settings.wifi_ssid[0] != '\0') {
-        (void)wifi_module_connect();
+    if(app_settings.wifi_enable) {
+        (void)wifi_module_start();
     }
 
     // LOG("wifi actor init done");
@@ -396,8 +481,9 @@ esp_err_t wifi_actor_deinit(void)
         s_actor.inbox_q = NULL;
     }
 
-    s_actor.weak_reported = false;
-    s_actor.connect_after_scan = false;
     s_actor.last_signal_level = 0;
+    s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
+    s_actor.connect_after_disconnect = false;
+    s_actor.connect_deadline = 0;
     return wifi_module_deinit();
 }

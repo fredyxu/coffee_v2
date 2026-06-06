@@ -1,5 +1,7 @@
 #include "modules/ui/page/page_settings/page_settings_focus.h"
 
+#include <stdio.h>
+
 #include "core/utils/log.h"
 
 #define PAGE_SETTINGS_FOCUS_MAX 32
@@ -142,21 +144,14 @@ int page_settings_focus_find_index_by_sub_item(settings_sub_item_id_t sub_item_i
 	return -1;
 }
 
-bool page_settings_focus_add(const settings_sub_item_t *item,
-							 lv_obj_t *row,
-							 lv_obj_t *control,
-							 lv_obj_t *value_label,
-							 bool disabled)
-{
-	return page_settings_focus_add_at(item, row, control, value_label, disabled, s_focus_count);
-}
-
-bool page_settings_focus_add_at(const settings_sub_item_t *item,
-								lv_obj_t *row,
-								lv_obj_t *control,
-								lv_obj_t *value_label,
-								bool disabled,
-								size_t index)
+static bool focus_add_at(const settings_sub_item_t *item,
+						 const settings_value_list_t *list_item,
+						 lv_obj_t *row,
+						 lv_obj_t *control,
+						 lv_obj_t *value_label,
+						 const char *value_str,
+						 bool disabled,
+						 size_t index)
 {
 	if(item == NULL || row == NULL) {
 		return false;
@@ -186,8 +181,12 @@ bool page_settings_focus_add_at(const settings_sub_item_t *item,
 		.control = control,
 		.value_label = value_label,
 		.item = item,
+		.list_item = list_item,
 		.disabled = disabled,
 	};
+	if(value_str != NULL) {
+		(void)snprintf(focus_item.value_str, sizeof(focus_item.value_str), "%s", value_str);
+	}
 
 	if(item->value != NULL) {
 		switch(item->value_type) {
@@ -224,6 +223,37 @@ bool page_settings_focus_add_at(const settings_sub_item_t *item,
 	}
 
 	return true;
+}
+
+bool page_settings_focus_add(const settings_sub_item_t *item,
+							 lv_obj_t *row,
+							 lv_obj_t *control,
+							 lv_obj_t *value_label,
+							 bool disabled)
+{
+	return focus_add_at(item, NULL, row, control, value_label, NULL, disabled, s_focus_count);
+}
+
+bool page_settings_focus_add_at(const settings_sub_item_t *item,
+								lv_obj_t *row,
+								lv_obj_t *control,
+								lv_obj_t *value_label,
+								const char *value_str,
+								bool disabled,
+								size_t index)
+{
+	return focus_add_at(item, NULL, row, control, value_label, value_str, disabled, index);
+}
+
+bool page_settings_focus_add_list_at(const settings_sub_item_t *item,
+									 const settings_value_list_t *list_item,
+									 lv_obj_t *row,
+									 lv_obj_t *value_label,
+									 bool disabled,
+									 size_t index)
+{
+	const char *value_str = list_item != NULL ? list_item->value_str : NULL;
+	return focus_add_at(item, list_item, row, NULL, value_label, value_str, disabled, index);
 }
 
 void page_settings_focus_remove_sub_item(settings_sub_item_id_t sub_item_id)

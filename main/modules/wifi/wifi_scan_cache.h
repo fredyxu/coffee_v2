@@ -12,6 +12,7 @@ extern "C" {
 #define WIFI_SCAN_CACHE_MAX_APS 16u
 
 typedef struct {
+	char title[33];
     char ssid[WIFI_SCAN_CACHE_SSID_MAX + 1u];
     int rssi;
     uint8_t authmode;

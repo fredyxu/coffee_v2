@@ -23,7 +23,8 @@ void page_settings_item_apply_style_page_item_bool(
 );
 void page_settings_item_apply_style_page_item_list(
 	lv_obj_t *obj_body,
-	lv_obj_t *obj_title_label
+	lv_obj_t *obj_title_label,
+	bool selected
 );
 
 void page_settings_item_apply_style_page_item_int(

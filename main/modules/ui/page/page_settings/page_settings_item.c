@@ -14,6 +14,7 @@
 #include "core/utils/log.h"
 #include "modules/ui/ui_actor.h"
 #include "core/msg/msg.h"
+#include "modules/ui/page/components/component_note/component_note.h"
 
 
 static lv_obj_t *page_body;
@@ -33,6 +34,32 @@ typedef struct {
 
 static page_settings_list_view_t s_list_views[PAGE_SETTINGS_LIST_VIEW_MAX];
 static size_t s_list_view_count;
+
+static settings_value_list_t *settings_list_items(const settings_sub_item_t *item)
+{
+	if(item == NULL) {
+		return NULL;
+	}
+
+	if(item->value_source != NULL) {
+		return item->value_source->list;
+	}
+
+	return NULL;
+}
+
+static size_t *settings_list_count(const settings_sub_item_t *item)
+{
+	if(item == NULL) {
+		return NULL;
+	}
+
+	if(item->value_source != NULL) {
+		return item->value_source->count;
+	}
+
+	return NULL;
+}
 
 static void focus_rotate(int step);
 static void focus_press(void);
@@ -69,8 +96,11 @@ void static input_handler(const msg_t *msg) {
 
 		break;
 	case MSG_TYPE_CMD:
+		LOG("命令事件: 事件 %d", msg->event);
 		break;
+
 	case MSG_TYPE_SYS:
+		LOG("系统事件: 事件 %d", msg->event);
 		break;
 	}
 }
@@ -136,8 +166,9 @@ static void focus_open_wifi_password_keyboard(page_settings_item_focus_item_t *f
 		return;
 	}
 
-	const char *ssid = lv_label_get_text(focus->value_label);
-	(void)snprintf(s_selected_wifi_ssid, sizeof(s_selected_wifi_ssid), "%s", ssid ? ssid : "");
+	const char *ssid = focus->value_str[0] != '\0' ? focus->value_str : lv_label_get_text(focus->value_label);
+	(void)strncpy(s_selected_wifi_ssid, ssid ? ssid : "", sizeof(s_selected_wifi_ssid) - 1);
+	s_selected_wifi_ssid[sizeof(s_selected_wifi_ssid) - 1] = '\0';
 	s_wifi_password[0] = '\0';
 
 	s_keyboard = ui_keyboard_modal_create(&(ui_keyboard_config_t) {
@@ -159,11 +190,16 @@ static void focus_press(void)
 		return;
 	}
 
-	switch(focus->value_type) {
-		case SETTINGS_VALUE_TYPE_LIST:
-			if(focus->sub_item_id == SETTINGS_SUB_ITEM_ID_WIFI_SSID_LIST) {
-				focus_open_wifi_password_keyboard(focus);
-			}
+		switch(focus->value_type) {
+			case SETTINGS_VALUE_TYPE_LIST:
+				if(focus->list_item != NULL && focus->list_item->on_action != NULL) {
+					(void)page_settings_binding_press(focus);
+					break;
+				}
+
+				if(focus->sub_item_id == SETTINGS_SUB_ITEM_ID_WIFI_SSID_LIST) {
+					focus_open_wifi_password_keyboard(focus);
+				}
 			break;
 
 		default:
@@ -193,7 +229,9 @@ static void list_view_render(page_settings_list_view_t *view)
 	page_settings_focus_remove_sub_item(view->item->id);
 	lv_obj_clean(view->body);
 
-	if(view->item->value_list == NULL || view->item->value_count == NULL || *view->item->value_count == 0) {
+	settings_value_list_t *value_list = settings_list_items(view->item);
+	size_t *value_count = settings_list_count(view->item);
+	if(value_list == NULL || value_count == NULL || *value_count == 0) {
 		lv_obj_add_flag(view->body, LV_OBJ_FLAG_HIDDEN);
 		if(view->line != NULL) {
 			lv_obj_add_flag(view->line, LV_OBJ_FLAG_HIDDEN);
@@ -207,13 +245,16 @@ static void list_view_render(page_settings_list_view_t *view)
 	}
 
 	size_t focus_index = view->focus_insert_index;
-	for(size_t i = 0; i < *view->item->value_count; i++) {
-		settings_value_list_t *value_info = view->item->value_list + i;
+	for(size_t i = 0; i < *value_count; i++) {
+		settings_value_list_t *value_info = value_list + i;
 		(void)page_settings_renderer_insert_list_row(
 			view->body,
 			view->item,
+			value_info,
 			value_info->title,
+			value_info->value_str,
 			value_info->disabled,
+			value_info->selected,
 			focus_index
 		);
 
@@ -329,6 +370,13 @@ void page_settings_item_show(lv_obj_t *p, settings_item_id_t id) {
     lv_obj_add_style(page_body, &style_page_body, LV_STATE_DEFAULT);
     ui_add_top_status(page_body);
     create_page();
+
+	static ui_note_ctx_t note_ctx = {
+		.type = MSG,
+		.title = "这是一个提示",
+	};
+
+	ui_note_show(&note_ctx);
 
 	ui_actor_set_ops(&page_settings_item_ops);
 }

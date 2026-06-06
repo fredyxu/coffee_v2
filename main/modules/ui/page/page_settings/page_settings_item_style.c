@@ -142,7 +142,7 @@ void page_settings_item_apply_style_page_item_text(lv_obj_t *obj_body) {
 // **************************************************
 static lv_style_t style_list_body;
 static lv_style_t style_list_title_label;
-
+static lv_style_t style_list_select_label;
 // 列表样式初始化
 static void style_init_item_value_list() {
 	ui_style_init_row(&style_list_body);
@@ -153,16 +153,23 @@ static void style_init_item_value_list() {
 	lv_style_set_text_font(&style_list_title_label, UI_FONT_12);
 	lv_style_set_pad_top(&style_list_title_label, CONFIG_UI_MARGIN);
 
+	lv_style_init(&style_list_select_label);
+	lv_style_set_text_color(&style_list_select_label, UI_COLOR_ACCENT);
+
 }
 
 void page_settings_item_apply_style_page_item_list(
 	lv_obj_t *obj_body,
-	lv_obj_t *obj_title_label) 
-{
+	lv_obj_t *obj_title_label,
+	bool selected
+) {
 	lv_obj_add_style(obj_body, &style_list_body, LV_STATE_DEFAULT);
 	lv_obj_add_style(obj_title_label, &style_list_title_label, LV_STATE_DEFAULT);
 	lv_obj_add_style(obj_body, &style_focus_body, LV_STATE_FOCUSED);
 	lv_obj_add_style(obj_body, &style_edit_body, LV_STATE_CHECKED);
+	if (selected) {
+		lv_obj_add_style(obj_title_label, &style_list_select_label, LV_STATE_DEFAULT);
+	}
 }
 
 

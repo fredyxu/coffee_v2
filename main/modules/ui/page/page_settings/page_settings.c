@@ -14,6 +14,7 @@
 #include "modules/ui/theme/font.h"
 #include "modules/ui/style/ui_style.h"
 #include "modules/ui/page/page_settings/page_settings_data.h"
+#include "modules/ui/page/components/component_note/component_note.h"
 
 
 #define SETTINGS_PAGE_WIDTH DISPLAY_H_RES - CONFIG_UI_MARGIN * 2
@@ -180,6 +181,8 @@ esp_err_t page_settings_show(lv_obj_t *p) {
 	style_init();
 
 	create_page();
+
+	
 
 	return ESP_OK;
 }

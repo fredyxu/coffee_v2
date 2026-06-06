@@ -5,7 +5,7 @@
 #define UI_COLOR_PANEL_2				lv_color_hex(0x1B2128)
 
 #define UI_COLOR_WINDOW					lv_color_hex(0xD0D7DE)
-#define UI_COLOR_WINDOW_TITLE			lv_color_hex(0x202833)
+#define UI_COLOR_WINDOW_TITLE			lv_color_hex(0x24547A)
 
 #define UI_COLOR_INPUT_BG				lv_color_hex(0x0D1117)
 #define UI_COLOR_INPUT_BORDER			lv_color_hex(0x3D4652)
@@ -24,6 +24,11 @@
 #define UI_COLOR_WARN					lv_color_hex(0xD29922)
 #define UI_COLOR_ERROR					lv_color_hex(0xF85149)
 #define UI_COLOR_BORDER					lv_color_hex(0x484F58)
+#define UI_COLOR_CONFIRM 				lv_color_hex(0x2F80ED)
+#define UI_COLOR_CONFIRM_ACTIVE 		lv_color_hex(0x1C5FB8)
+#define UI_COLOR_CONFIRM_DISABLED 		lv_color_hex(0x7FAE94)
+// #define UI_COLOR_CONFIRM 				lv_color_hex(0x2563C7)
+// #define UI_COLOR_CONFIRM_ACTIVE 		lv_color_hex(0x1D4F9E)
 
 #define UI_COLOR_FOCUS_1				lv_color_hex(0x334963)
 

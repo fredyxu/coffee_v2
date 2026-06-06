@@ -13,8 +13,11 @@ lv_obj_t *page_settings_renderer_create_list_container(lv_obj_t *parent);
 
 lv_obj_t *page_settings_renderer_insert_list_row(lv_obj_t *parent,
 												 const settings_sub_item_t *item,
+												 const settings_value_list_t *list_item,
 												 const char *title,
+												 const char *value_str,
 												 bool disabled,
+												 bool selected,
 												 size_t focus_index);
 
 void page_settings_renderer_insert_static_list(lv_obj_t *parent, const settings_sub_item_t *item);

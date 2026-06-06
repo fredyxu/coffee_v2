@@ -211,6 +211,14 @@ page_settings_binding_result_t page_settings_binding_press(page_settings_item_fo
 
 			return PAGE_SETTINGS_BINDING_RESULT_UNHANDLED;
 
+		case SETTINGS_VALUE_TYPE_LIST:
+			if(focus->list_item != NULL && focus->list_item->on_action != NULL) {
+				focus->list_item->on_action(focus->list_item, focus->list_item->user_data);
+				return PAGE_SETTINGS_BINDING_RESULT_VALUE_CHANGED;
+			}
+
+			return PAGE_SETTINGS_BINDING_RESULT_UNHANDLED;
+
 		default:
 			return PAGE_SETTINGS_BINDING_RESULT_UNHANDLED;
 	}

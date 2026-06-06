@@ -21,9 +21,10 @@ typedef struct {
 	lv_obj_t *control;
 	lv_obj_t *value_label;
 	int value_int;
-	char value_str[64];
+	char value_str[65];
 	bool value_bool;
 	const settings_sub_item_t *item;
+	const settings_value_list_t *list_item;
 	void (*on_enter)(const settings_sub_item_t *item);
 	void (*on_change)(const settings_sub_item_t *item, int step);
 	bool disabled;
@@ -51,11 +52,18 @@ bool page_settings_focus_add(const settings_sub_item_t *item,
 							 lv_obj_t *value_label,
 							 bool disabled);
 bool page_settings_focus_add_at(const settings_sub_item_t *item,
-								lv_obj_t *row,
-								lv_obj_t *control,
-								lv_obj_t *value_label,
-								bool disabled,
-								size_t index);
+									lv_obj_t *row,
+									lv_obj_t *control,
+									lv_obj_t *value_label,
+									const char *value_str,
+									bool disabled,
+									size_t index);
+bool page_settings_focus_add_list_at(const settings_sub_item_t *item,
+									 const settings_value_list_t *list_item,
+									 lv_obj_t *row,
+									 lv_obj_t *value_label,
+									 bool disabled,
+									 size_t index);
 void page_settings_focus_remove_sub_item(settings_sub_item_id_t sub_item_id);
 void page_settings_focus_set_index(int index);
 void page_settings_focus_move(int step);

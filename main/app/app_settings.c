@@ -35,17 +35,10 @@ typedef struct {
     int32_t min_i32;
     int32_t max_i32;
     uint32_t dirty_bit;
+	app_setting_value_t default_value;
 } app_setting_desc_t;
 
-app_settings_t app_settings = {
-    .wifi_enable = true,
-    .wifi_ssid = WIFI_STA_SSID,
-    .wifi_password = WIFI_STA_PASSWORD,
-    .wifi_auto_reconnect = (WIFI_AUTO_RECONNECT != 0),
-    .wifi_weak_rssi_threshold = WIFI_WEAK_RSSI_THRESHOLD,
-    .audio_volume = 50,
-    .display_brightness = 50,
-};
+app_settings_t app_settings = {0};
 
 static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
     [APP_SETTING_ID_WIFI_ENABLE] = {
@@ -56,6 +49,7 @@ static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
         .target = &app_settings.wifi_enable,
         .target_size = sizeof(app_settings.wifi_enable),
         .dirty_bit = (1u << APP_SETTING_ID_WIFI_ENABLE),
+		.default_value.b = true,
     },
     [APP_SETTING_ID_WIFI_SSID] = {
         .id = APP_SETTING_ID_WIFI_SSID,
@@ -65,6 +59,7 @@ static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
         .target = app_settings.wifi_ssid,
         .target_size = sizeof(app_settings.wifi_ssid),
         .dirty_bit = (1u << APP_SETTING_ID_WIFI_SSID),
+		.default_value.str = "",
     },
     [APP_SETTING_ID_WIFI_PASSWORD] = {
         .id = APP_SETTING_ID_WIFI_PASSWORD,
@@ -74,6 +69,7 @@ static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
         .target = app_settings.wifi_password,
         .target_size = sizeof(app_settings.wifi_password),
         .dirty_bit = (1u << APP_SETTING_ID_WIFI_PASSWORD),
+		.default_value.str = "",
     },
     [APP_SETTING_ID_WIFI_AUTO_RECONNECT] = {
         .id = APP_SETTING_ID_WIFI_AUTO_RECONNECT,
@@ -83,6 +79,7 @@ static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
         .target = &app_settings.wifi_auto_reconnect,
         .target_size = sizeof(app_settings.wifi_auto_reconnect),
         .dirty_bit = (1u << APP_SETTING_ID_WIFI_AUTO_RECONNECT),
+		.default_value.b = true,
     },
     [APP_SETTING_ID_WIFI_WEAK_RSSI_THRESHOLD] = {
         .id = APP_SETTING_ID_WIFI_WEAK_RSSI_THRESHOLD,
@@ -94,6 +91,7 @@ static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
         .min_i32 = -100,
         .max_i32 = -30,
         .dirty_bit = (1u << APP_SETTING_ID_WIFI_WEAK_RSSI_THRESHOLD),
+		.default_value.i32 = -70,
     },
     [APP_SETTING_ID_AUDIO_VOLUME] = {
         .id = APP_SETTING_ID_AUDIO_VOLUME,
@@ -105,6 +103,7 @@ static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
         .min_i32 = 0,
         .max_i32 = 100,
         .dirty_bit = (1u << APP_SETTING_ID_AUDIO_VOLUME),
+		.default_value.i32 = 50,
     },
     [APP_SETTING_ID_DISPLAY_BRIGHTNESS] = {
         .id = APP_SETTING_ID_DISPLAY_BRIGHTNESS,
@@ -116,6 +115,7 @@ static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
         .min_i32 = 0,
         .max_i32 = 100,
         .dirty_bit = (1u << APP_SETTING_ID_DISPLAY_BRIGHTNESS),
+		.default_value.i32 = 50,
     },
 };
 
@@ -126,6 +126,9 @@ static uint32_t s_dirty_mask;
 static bool s_save_in_progress;
 static esp_err_t s_last_save_err = ESP_OK;
 #endif
+
+
+
 
 static const app_setting_desc_t *app_settings_get_desc(app_setting_id_t id)
 {
@@ -359,12 +362,44 @@ static esp_err_t app_settings_start_save_task(void)
 }
 #endif
 
+static void app_settings_load_defaults(void)
+{
+    for(app_setting_id_t id = 0; id < APP_SETTING_ID_MAX; id++) {
+        const app_setting_desc_t *desc = app_settings_get_desc(id);
+        if(desc == NULL) {
+            continue;
+        }
+
+        switch(desc->type) {
+            case STORE_KV_BOOL:
+                *(bool *)desc->target = desc->default_value.b;
+                break;
+
+            case STORE_KV_I32:
+                *(int32_t *)desc->target =
+                    app_settings_clamp_i32(desc, desc->default_value.i32);
+                break;
+
+            case STORE_KV_STR:
+                snprintf((char *)desc->target,
+                         desc->target_size,
+                         "%s",
+                         desc->default_value.str ? desc->default_value.str : "");
+                break;
+
+            default:
+                break;
+        }
+    }
+}
 esp_err_t app_settings_init(void)
 {
     esp_err_t err = store_kv_init();
     if(err != ESP_OK) {
         return err;
     }
+
+    app_settings_load_defaults();
 
     err = app_settings_load_all();
     if(err != ESP_OK) {

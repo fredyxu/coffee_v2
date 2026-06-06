@@ -60,9 +60,6 @@ esp_err_t status_apply_sys_msg(const msg_t *sys_msg)
             s_status.current.wifi_connected = false;
             s_status.current.wifi_level = 0;
             break;
-        case MSG_EVT_SYS_WIFI_SIGNAL_WEAK:
-            s_status.current.wifi_level = 1;
-            break;
         case MSG_EVT_SYS_WIFI_SIGNAL_LEVEL: {
             int lv = sys_msg->data.value;
             if(lv < 1) lv = 1;

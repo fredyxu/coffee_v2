@@ -164,7 +164,6 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
 
         case MSG_EVT_SYS_WIFI_CONNECTED:
         case MSG_EVT_SYS_WIFI_DISCONNECTED:
-        case MSG_EVT_SYS_WIFI_SIGNAL_WEAK:
         case MSG_EVT_SYS_WIFI_SIGNAL_LEVEL:
         case MSG_EVT_SYS_WIFI_SCAN_STARTED:
         case MSG_EVT_SYS_WIFI_SCAN_AP_FOUND:

@@ -6,8 +6,10 @@
 #include "config/config_sys.h"
 #include "core/msg/msg.h"
 #include "core/msg/msg_sub.h"
+#include "core/state/status.h"
 #include "core/utils/log.h"
 #include "modules/ui/adapter/lvgl_port.h"
+#include "modules/ui/page/components/components_top_status/component_top_status.h"
 
 static const ui_page_ops_t *s_page_ops = NULL;
 
@@ -27,10 +29,26 @@ typedef struct {
 	const msg_t *msg;
 } ui_actor_input_ctx_t;
 
+static void ui_actor_dispatch_sys_msg(const msg_t *msg)
+{
+	if(msg == NULL || msg->type != MSG_TYPE_SYS) {
+		return;
+	}
+
+	(void)status_apply_sys_msg(msg);
+	ui_top_status_handle_sys_msg(msg);
+}
+
 static void ui_actor_dispatch_input(void *arg)
 {
 	ui_actor_input_ctx_t *ctx = (ui_actor_input_ctx_t *)arg;
-	if(ctx == NULL || ctx->ops == NULL || ctx->msg == NULL) {
+	if(ctx == NULL || ctx->msg == NULL) {
+		return;
+	}
+
+	ui_actor_dispatch_sys_msg(ctx->msg);
+
+	if(ctx->ops == NULL) {
 		return;
 	}
 
@@ -51,13 +69,11 @@ static void ui_actor_handle_msg(const msg_t *msg)
     }
 
 	const ui_page_ops_t *ops = s_page_ops;
-	if(ops != NULL && (ops->on_input != NULL || ops->on_msg != NULL)) {
-		ui_actor_input_ctx_t ctx = {
-			.ops = ops,
-			.msg = msg,
-		};
-		lvgl_port_run(ui_actor_dispatch_input, &ctx);
-	}
+	ui_actor_input_ctx_t ctx = {
+		.ops = ops,
+		.msg = msg,
+	};
+	lvgl_port_run(ui_actor_dispatch_input, &ctx);
 }
 
 static void ui_actor_task(void *arg)

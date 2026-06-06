@@ -163,9 +163,6 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 
             wifi_emit_event(WIFI_MOD_EVT_STA_DISCONNECTED, reason, 0, 0);
 
-            if(s_wifi.auto_reconnect && s_wifi.started) {
-                (void)esp_wifi_connect();
-            }
             return;
         }
     }

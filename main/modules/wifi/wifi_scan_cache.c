@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include "core/utils/log.h"
+#include "app/app_settings.h"
 
 static wifi_scan_ap_t s_scan_cache[WIFI_SCAN_CACHE_MAX_APS];
 static size_t s_scan_count;
@@ -14,6 +15,7 @@ void wifi_scan_cache_clear(void)
 
 bool wifi_scan_cache_add(const wifi_scan_ap_t *ap)
 {
+	
     if(ap == NULL || ap->ssid[0] == '\0') {
         return false;
     }

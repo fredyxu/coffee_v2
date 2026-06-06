@@ -36,8 +36,10 @@ typedef enum {
 } settings_value_type_t;
 
 typedef struct settings_sub_item_t settings_sub_item_t;
+typedef struct settings_value_list_t settings_value_list_t;
 typedef void (*settings_action_cb_t)(const settings_sub_item_t *item);
 typedef void (*settings_change_cb_t)(const settings_sub_item_t *item);
+typedef void (*settings_value_list_action_cb_t)(const settings_value_list_t *item, void *user_data);
 
 typedef enum {
     SETTINGS_PAGE_WIFI = 0,
@@ -82,12 +84,22 @@ typedef enum {
     SETTINGS_LIST_ITEM_STATUS,
 } settings_list_item_type_t;
 
-typedef struct {
-    char title[33];
+struct settings_value_list_t {
+    char title[48];
+	char value_str[65];
     int value_int;
     bool disabled;
     settings_list_item_type_t type;
-} settings_value_list_t;
+	bool selected;
+    settings_value_list_action_cb_t on_action;
+    void *user_data;
+};
+
+typedef struct {
+    settings_value_list_t *list;
+    size_t *count;
+    size_t max;
+} settings_value_list_source_t;
 
 struct settings_sub_item_t {
     settings_sub_item_id_t id;
@@ -101,13 +113,12 @@ struct settings_sub_item_t {
     int min_value;
     int max_value;
     int step;
-
+	
+	// 这个值是否绑定到 app_settings_update()。有的话，修改时走持久化设置更新。
     bool has_setting_id;
     app_setting_id_t setting_id;
 
-    settings_value_list_t *value_list;
-    size_t *value_count;
-    size_t value_list_max;
+    const settings_value_list_source_t *value_source;
 
     bool has_cmd_event;
     msg_event_t cmd_event;

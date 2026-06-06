@@ -29,21 +29,10 @@ static settings_sub_item_t s_wifi_sub_items[] = {
         .id = SETTINGS_SUB_ITEM_ID_WIFI_SSID_LIST,
         .value_type = SETTINGS_VALUE_TYPE_LIST,
         .title = "可用网络",
+        .value_source = &wifi_settings_ssid_source,
     },
 
 };
-
-static void page_settings_init_wifi_items(void)
-{
-	for(size_t i = 0; i < sizeof(s_wifi_sub_items) / sizeof(s_wifi_sub_items[0]); i++) {
-		if(s_wifi_sub_items[i].id == SETTINGS_SUB_ITEM_ID_WIFI_SSID_LIST) {
-			s_wifi_sub_items[i].value_list = wifi_settings_ssid_list();
-			s_wifi_sub_items[i].value_count = wifi_settings_ssid_count();
-			s_wifi_sub_items[i].value_list_max = wifi_settings_ssid_max();
-			return;
-		}
-	}
-}
 
 static settings_sub_item_t s_audio_sub_items[] = {
     {
@@ -131,7 +120,6 @@ const settings_sub_item_t *page_settings_get_sub_items(settings_item_id_t id, si
 
     switch (id) {
     case SETTINGS_ITEM_ID_WIFI:
-		page_settings_init_wifi_items();
         if (count != NULL) {
             *count = sizeof(s_wifi_sub_items) / sizeof(s_wifi_sub_items[0]);
         }
