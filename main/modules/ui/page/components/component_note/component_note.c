@@ -42,27 +42,60 @@ static lv_style_t s_style_btn_ok_body;
 static lv_style_t s_style_btn_cxl_body;
 
 static lv_style_t s_style_btn_focus;
+static ui_note_ctx_t s_note_ctx;
+static lv_obj_t *s_obj_btn_ok_body;
+static lv_obj_t *s_obj_btn_cxl_body;
+static bool s_note_visible;
+static bool s_note_focus_cancel;
+
+static void note_update_focus(void)
+{
+	if(s_obj_btn_ok_body != NULL) {
+		if(!s_note_focus_cancel) {
+			lv_obj_add_state(s_obj_btn_ok_body, LV_STATE_FOCUSED);
+		} else {
+			lv_obj_remove_state(s_obj_btn_ok_body, LV_STATE_FOCUSED);
+		}
+	}
+
+	if(s_obj_btn_cxl_body != NULL) {
+		if(s_note_focus_cancel) {
+			lv_obj_add_state(s_obj_btn_cxl_body, LV_STATE_FOCUSED);
+		} else {
+			lv_obj_remove_state(s_obj_btn_cxl_body, LV_STATE_FOCUSED);
+		}
+	}
+}
+
+static void note_confirm(void)
+{
+	if(s_note_ctx.on_confirm != NULL) {
+		s_note_ctx.on_confirm(s_note_ctx.user_data);
+	}
+
+	ui_note_hide();
+}
+
+static void note_cancel(void)
+{
+	if(s_note_ctx.on_cancel != NULL) {
+		s_note_ctx.on_cancel(s_note_ctx.user_data);
+	}
+
+	ui_note_hide();
+}
 
 static void note_confirm_event_cb(lv_event_t *e) {
-    ui_note_ctx_t *ctx = lv_event_get_user_data(e);
+	(void)e;
 
-    if (ctx != NULL && ctx->on_confirm != NULL) {
-        ctx->on_confirm(ctx->user_data);
-    }
-
-    ui_note_hide();
+	note_confirm();
 }
 
 static void note_cancel_event_cb(lv_event_t *e) {
-    ui_note_ctx_t *ctx = lv_event_get_user_data(e);
+	(void)e;
 
-    if (ctx != NULL && ctx->on_cancel != NULL) {
-        ctx->on_cancel(ctx->user_data);
-    }
-
-    ui_note_hide();
+	note_cancel();
 }
-
 
 
 static void style_init(void) {
@@ -154,12 +187,18 @@ static void style_init(void) {
 	s_style_init_done = true;
 }
 
-static ui_note_ctx_t s_note_ctx;
-
 void ui_note_show(ui_note_ctx_t *ctx) {
+	if(ctx == NULL) {
+		return;
+	}
+
 	ui_note_hide();
 	style_init();
 	s_note_ctx = *ctx;
+	s_note_visible = true;
+	s_note_focus_cancel = s_note_ctx.type == ASK;
+	s_obj_btn_ok_body = NULL;
+	s_obj_btn_cxl_body = NULL;
 	// 背景
 	s_obj_bg = lv_obj_create(lv_layer_top());
 	lv_obj_add_style(s_obj_bg, &s_style_bg, LV_STATE_DEFAULT);
@@ -193,7 +232,7 @@ void ui_note_show(ui_note_ctx_t *ctx) {
 	lv_obj_add_style(s_obj_msg_label, &s_style_msg_label, LV_STATE_DEFAULT);
 	lv_label_set_long_mode(s_obj_msg_label, LV_LABEL_LONG_WRAP);
 	
-	lv_label_set_text(s_obj_msg_label, s_note_ctx.message);
+	lv_label_set_text(s_obj_msg_label, s_note_ctx.message ? s_note_ctx.message : "");
 
 	// 按钮区域
 	lv_obj_t *s_obj_btn_body = lv_obj_create(s_obj_body);
@@ -201,39 +240,45 @@ void ui_note_show(ui_note_ctx_t *ctx) {
 
 
 	// 确定按钮
-	lv_obj_t *s_obj_btn_ok_body = lv_obj_create(s_obj_btn_body);
+	s_obj_btn_ok_body = lv_obj_create(s_obj_btn_body);
 	lv_obj_add_style(s_obj_btn_ok_body, &s_style_btn, LV_STATE_DEFAULT);
 	lv_obj_add_style(s_obj_btn_ok_body, &s_style_btn_ok_body, LV_STATE_DEFAULT);
 	lv_obj_add_style(s_obj_btn_ok_body, &s_style_btn_focus, LV_STATE_FOCUSED);
 
 	// 确定文字
 	lv_obj_t *s_obj_btn_ok_label = lv_label_create(s_obj_btn_ok_body);
-	lv_label_set_text(s_obj_btn_ok_label, "确定");
+	lv_label_set_text(s_obj_btn_ok_label, s_note_ctx.confirm_text ? s_note_ctx.confirm_text : "确定");
 
 	lv_obj_add_event_cb(s_obj_btn_ok_body, note_confirm_event_cb, LV_EVENT_CLICKED, &s_note_ctx);
 
 
 	if(s_note_ctx.type == ASK) {
 		// 取消按钮
-		lv_obj_t *s_obj_btn_cxl_body = lv_obj_create(s_obj_btn_body);
+		s_obj_btn_cxl_body = lv_obj_create(s_obj_btn_body);
 		lv_obj_add_style(s_obj_btn_cxl_body, &s_style_btn, LV_STATE_DEFAULT);
 		lv_obj_add_style(s_obj_btn_cxl_body, &s_style_btn_cxl_body, LV_STATE_DEFAULT);
 		lv_obj_add_style(s_obj_btn_cxl_body, &s_style_btn_focus, LV_STATE_FOCUSED);
 
 		// 取消文字
 		lv_obj_t *s_obj_btn_cxl_label = lv_label_create(s_obj_btn_cxl_body);
-		lv_label_set_text(s_obj_btn_cxl_label, "取消");
+		lv_label_set_text(s_obj_btn_cxl_label, s_note_ctx.cancel_text ? s_note_ctx.cancel_text : "取消");
 
 		lv_obj_add_event_cb(s_obj_btn_cxl_body, note_cancel_event_cb, LV_EVENT_CLICKED, &s_note_ctx);
 	}
+
+	note_update_focus();
 }
 
 
 void ui_note_hide(void) {
-	if (s_obj_bg != NULL) {
+	if(s_obj_bg != NULL) {
 		lv_obj_delete(s_obj_bg);
 		s_obj_bg = NULL;
 	}
+	s_obj_btn_ok_body = NULL;
+	s_obj_btn_cxl_body = NULL;
+	s_note_visible = false;
+	s_note_focus_cancel = false;
 	// s_obj_body = NULL;
 	// s_obj_title_body = NULL;
 	// s_obj_title_label = NULL;
@@ -244,6 +289,39 @@ void ui_note_hide(void) {
 	// s_obj_btn_cxl_body = NULL;
 	// s_obj_btn_ok_label = NULL;
 	// s_obj_btn_cxl_label = NULL;
+}
+
+bool ui_note_is_visible(void)
+{
+	return s_note_visible;
+}
+
+void ui_note_handle_input(const msg_t *msg)
+{
+	if(msg == NULL || !s_note_visible || msg->type != MSG_TYPE_INPUT) {
+		return;
+	}
+
+	switch(msg->event) {
+		case MSG_EVT_INPUT_ENCODER_CW:
+		case MSG_EVT_INPUT_ENCODER_CCW:
+			if(s_note_ctx.type == ASK) {
+				s_note_focus_cancel = !s_note_focus_cancel;
+				note_update_focus();
+			}
+			break;
+
+		case MSG_EVT_INPUT_ENCODER_PRESS:
+			if(s_note_ctx.type == ASK && s_note_focus_cancel) {
+				note_cancel();
+			} else {
+				note_confirm();
+			}
+			break;
+
+		default:
+			break;
+	}
 }
 
 

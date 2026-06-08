@@ -7,6 +7,7 @@
 #include "app/app_settings.h"
 #include "wifi.h"
 #endif
+#include "modules/ui/page/components/component_note/component_note.h"
 
 #define WIFI_SETTINGS_SSID_MAX 16
 
@@ -28,14 +29,25 @@ static settings_value_list_t s_wifi_ssid_list[WIFI_SETTINGS_SSID_MAX] = {
 
 static size_t s_wifi_ssid_count;
 
-static void wifi_settings_ssid_disconnect_action(const settings_value_list_t *item, void *user_data)
+static void wifi_settings_ssid_disconnect_confirm_cb(void *user_data)
 {
-	(void)item;
 	(void)user_data;
 
 #ifdef ESP_PLATFORM
 	(void)msg_send_cmd_value(MSG_SRC_LVGL, MSG_EVT_CMD_WIFI_DISCONNECT, 0, 0);
 #endif
+}
+
+static void wifi_settings_ssid_disconnect_action(const settings_value_list_t *item, void *user_data)
+{
+	(void)item;
+	(void)user_data;
+
+	ui_note_ctx_t ctx = ui_note_ctx_default();
+	ctx.type = ASK;
+	ctx.message = "确定断开连接？";
+	ctx.on_confirm = wifi_settings_ssid_disconnect_confirm_cb;
+	ui_note_show(&ctx);
 }
 
 const settings_value_list_source_t wifi_settings_ssid_source = {

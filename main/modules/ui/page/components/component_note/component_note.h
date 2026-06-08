@@ -1,6 +1,8 @@
 #pragma once
 
+#include <stdbool.h>
 #include "lvgl.h"
+#include "core/msg/msg.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,6 +35,8 @@ typedef struct {
 // void com_note_show(lv_obj_t *p);
 void ui_note_show(ui_note_ctx_t *ctx);
 void ui_note_hide(void);
+bool ui_note_is_visible(void);
+void ui_note_handle_input(const msg_t *msg);
 
 ui_note_ctx_t ui_note_ctx_default(void);
 

@@ -1,6 +1,7 @@
 #include "wifi_actor.h"
 
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "freertos/FreeRTOS.h"
@@ -13,6 +14,7 @@
 #include "core/msg/msg_sub.h"
 #include "core/utils/log.h"
 #include "modules/wifi/wifi.h"
+#include "modules/wifi/wifi_profile.h"
 #include "modules/wifi/wifi_scan_cache.h"
 #include "modules/wifi/wifi_settings.h"
 
@@ -31,11 +33,16 @@ typedef struct {
     msg_sub_handle_t sub;
     TaskHandle_t task;
     wifi_actor_conn_state_t conn_state;
-    bool connect_after_disconnect;
-    TickType_t connect_deadline;
-    int last_signal_level;
-    int weak_rssi_threshold;
-} wifi_actor_ctx_t;
+	    bool connect_after_disconnect;
+	    TickType_t connect_deadline;
+	    int last_signal_level;
+	    int weak_rssi_threshold;
+	    bool has_pending_credentials;
+	    char pending_ssid[33];
+	    char pending_password[65];
+	    char active_ssid[33];
+	    char active_password[65];
+	} wifi_actor_ctx_t;
 
 static wifi_actor_ctx_t s_actor = {0};
 
@@ -57,7 +64,55 @@ static int wifi_actor_calc_signal_level(int rssi, int weak_threshold)
     if(rssi <= weak_threshold + 15) {
         return 3;
     }
-    return 4;
+	    return 4;
+	}
+
+static void wifi_actor_clear_pending_credentials(void)
+{
+	s_actor.has_pending_credentials = false;
+	s_actor.pending_ssid[0] = '\0';
+	s_actor.pending_password[0] = '\0';
+}
+
+static void wifi_actor_set_active_credentials(const char *ssid, const char *password)
+{
+	(void)snprintf(s_actor.active_ssid, sizeof(s_actor.active_ssid), "%s", ssid ? ssid : "");
+	(void)snprintf(s_actor.active_password, sizeof(s_actor.active_password), "%s", password ? password : "");
+}
+
+static void wifi_actor_set_pending_credentials(const char *ssid, const char *password)
+{
+	s_actor.has_pending_credentials = true;
+	(void)snprintf(s_actor.pending_ssid, sizeof(s_actor.pending_ssid), "%s", ssid ? ssid : "");
+	(void)snprintf(s_actor.pending_password, sizeof(s_actor.pending_password), "%s", password ? password : "");
+	wifi_actor_set_active_credentials(s_actor.pending_ssid, s_actor.pending_password);
+}
+
+static esp_err_t wifi_actor_persist_connected_credentials(const char *ssid, const char *password)
+{
+	if(ssid == NULL || password == NULL || ssid[0] == '\0') {
+		return ESP_ERR_INVALID_ARG;
+	}
+
+	esp_err_t err = ESP_OK;
+	if(strcmp(app_settings.wifi_ssid, ssid) != 0) {
+		err = app_settings_update(&(app_settings_update_t) {
+			.id = APP_SETTING_ID_WIFI_SSID,
+			.value.str = ssid,
+		});
+		if(err != ESP_OK) {
+			return err;
+		}
+	}
+
+	if(strcmp(app_settings.wifi_password, password) != 0) {
+		err = app_settings_update(&(app_settings_update_t) {
+			.id = APP_SETTING_ID_WIFI_PASSWORD,
+			.value.str = password,
+		});
+	}
+
+	return err;
 }
 
 static esp_err_t wifi_actor_request_connect(void)
@@ -116,15 +171,16 @@ static esp_err_t wifi_actor_request_disconnect(bool connect_after_disconnect)
 
 static void wifi_actor_handle_connect_failed(int reason, bool abort_driver)
 {
-    LOG("wifi connect failed: reason=%d", reason);
-    s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
-    s_actor.connect_after_disconnect = false;
-    s_actor.connect_deadline = 0;
-    s_actor.last_signal_level = 0;
-    if(abort_driver) {
-        (void)wifi_module_disconnect();
-    }
-}
+	    LOG("wifi connect failed: reason=%d", reason);
+	    s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
+	    s_actor.connect_after_disconnect = false;
+	    s_actor.connect_deadline = 0;
+	    s_actor.last_signal_level = 0;
+	    wifi_actor_clear_pending_credentials();
+	    if(abort_driver) {
+	        (void)wifi_module_disconnect();
+	    }
+	}
 
 static void wifi_actor_check_connect_timeout(void)
 {
@@ -134,7 +190,46 @@ static void wifi_actor_check_connect_timeout(void)
 
     if(wifi_actor_tick_reached(xTaskGetTickCount(), s_actor.connect_deadline)) {
         wifi_actor_handle_connect_failed(ESP_ERR_TIMEOUT, true);
-    }
+	    }
+	}
+
+static esp_err_t wifi_actor_connect_profile(const wifi_profile_t *profile)
+{
+	if(profile == NULL || !profile->valid || profile->ssid[0] == '\0') {
+		return ESP_ERR_INVALID_ARG;
+	}
+
+	esp_err_t err = wifi_module_set_credentials(profile->ssid, profile->password);
+	if(err != ESP_OK) {
+		LOG("wifi profile credentials apply failed: ssid=%s err=%s", profile->ssid, esp_err_to_name(err));
+		return err;
+	}
+
+	wifi_actor_set_active_credentials(profile->ssid, profile->password);
+	return wifi_actor_request_connect();
+}
+
+static bool wifi_actor_can_auto_connect(void)
+{
+	return app_settings.wifi_enable &&
+	       !s_actor.has_pending_credentials &&
+	       s_actor.conn_state == WIFI_ACTOR_CONN_IDLE &&
+	       !wifi_module_is_connected();
+}
+
+static void wifi_actor_try_auto_connect_from_scan(void)
+{
+	if(!wifi_actor_can_auto_connect()) {
+		return;
+	}
+
+	wifi_profile_t profile = {0};
+	if(!wifi_profile_select_best_from_scan(&profile)) {
+		return;
+	}
+
+	LOG("wifi auto connect profile: %s", profile.ssid);
+	(void)wifi_actor_connect_profile(&profile);
 }
 
 static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
@@ -145,14 +240,22 @@ static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
 
 	// LOG("EVENT %d:", event->id);
 
-    switch(event->id) {
-        case WIFI_MOD_EVT_GOT_IP:
-            s_actor.conn_state = WIFI_ACTOR_CONN_CONNECTED;
-            s_actor.connect_after_disconnect = false;
-            s_actor.connect_deadline = 0;
-            wifi_settings_ssid_refresh_connected();
-            (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_CONNECTED, 1, 0);
-            break;
+	    switch(event->id) {
+	        case WIFI_MOD_EVT_GOT_IP:
+	            s_actor.conn_state = WIFI_ACTOR_CONN_CONNECTED;
+	            s_actor.connect_after_disconnect = false;
+	            s_actor.connect_deadline = 0;
+	            if(s_actor.has_pending_credentials) {
+	                (void)wifi_profile_save_success(s_actor.pending_ssid, s_actor.pending_password);
+	                (void)wifi_actor_persist_connected_credentials(s_actor.pending_ssid, s_actor.pending_password);
+	                wifi_actor_clear_pending_credentials();
+	            } else if(s_actor.active_ssid[0] != '\0') {
+	                (void)wifi_profile_save_success(s_actor.active_ssid, s_actor.active_password);
+	                (void)wifi_actor_persist_connected_credentials(s_actor.active_ssid, s_actor.active_password);
+	            }
+	            wifi_settings_ssid_refresh_connected();
+	            (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_CONNECTED, 1, 0);
+	            break;
         case WIFI_MOD_EVT_STA_DISCONNECTED:
             if(s_actor.conn_state == WIFI_ACTOR_CONN_CONNECTING) {
                 wifi_actor_handle_connect_failed(event->reason, false);
@@ -189,13 +292,14 @@ static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
             (void)msg_send_sys(&msg, 0);
             break;
         }
-        case WIFI_MOD_EVT_SCAN_DONE:
-            if(event->ap_count == 0) {
-                wifi_settings_ssid_set_empty_result();
-            }
-            wifi_settings_ssid_refresh_connected();
-            (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_DONE, event->ap_count, 0);
-            break;
+	        case WIFI_MOD_EVT_SCAN_DONE:
+	            if(event->ap_count == 0) {
+	                wifi_settings_ssid_set_empty_result();
+	            }
+	            wifi_settings_ssid_refresh_connected();
+	            wifi_actor_try_auto_connect_from_scan();
+	            (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_DONE, event->ap_count, 0);
+	            break;
         case WIFI_MOD_EVT_SCAN_FAILED:
             wifi_settings_ssid_set_status("扫描失败");
             (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_FAILED, event->reason, 0);
@@ -219,22 +323,6 @@ static esp_err_t wifi_actor_update_enable_setting(bool enable)
     });
 }
 
-static esp_err_t wifi_actor_update_credentials_setting(const char *ssid, const char *password)
-{
-    esp_err_t err = app_settings_update(&(app_settings_update_t) {
-        .id = APP_SETTING_ID_WIFI_SSID,
-        .value.str = ssid,
-    });
-    if(err != ESP_OK) {
-        return err;
-    }
-
-    return app_settings_update(&(app_settings_update_t) {
-        .id = APP_SETTING_ID_WIFI_PASSWORD,
-        .value.str = password,
-    });
-}
-
 static esp_err_t wifi_actor_scan_networks(void)
 {
     if(!app_settings.wifi_enable) {
@@ -254,7 +342,26 @@ static esp_err_t wifi_actor_scan_networks(void)
         (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_FAILED, (int)err, 0);
     }
 
-    return err;
+	    return err;
+	}
+
+static esp_err_t wifi_actor_start_auto_flow(void)
+{
+	esp_err_t err = wifi_module_start();
+	if(err != ESP_OK) {
+		return err;
+	}
+
+	if(wifi_profile_count() > 0) {
+		return wifi_actor_scan_networks();
+	}
+
+	if(app_settings.wifi_ssid[0] != '\0') {
+		wifi_actor_set_active_credentials(app_settings.wifi_ssid, app_settings.wifi_password);
+		return wifi_actor_request_connect();
+	}
+
+	return wifi_actor_scan_networks();
 }
 
 static esp_err_t wifi_actor_set_enable(bool enable)
@@ -264,21 +371,16 @@ static esp_err_t wifi_actor_set_enable(bool enable)
         return err;
     }
 
-    if(enable) {
-        err = wifi_module_start();
-        if(err != ESP_OK) {
-            return err;
-        }
+	    if(enable) {
+	        return wifi_actor_start_auto_flow();
+	    }
 
-        err = wifi_actor_scan_networks();
-        return ESP_OK;
-    }
-
-    s_actor.connect_after_disconnect = false;
-    s_actor.connect_deadline = 0;
-    (void)wifi_actor_request_disconnect(false);
-    err = wifi_module_stop();
-    s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
+	    s_actor.connect_after_disconnect = false;
+	    s_actor.connect_deadline = 0;
+	    wifi_actor_clear_pending_credentials();
+	    (void)wifi_actor_request_disconnect(false);
+	    err = wifi_module_stop();
+	    s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
     wifi_scan_cache_clear();
     wifi_settings_ssid_clear();
     (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_DONE, 0, 0);
@@ -287,22 +389,19 @@ static esp_err_t wifi_actor_set_enable(bool enable)
 
 static esp_err_t wifi_actor_set_credentials(const char *ssid, const char *password)
 {
-    esp_err_t err = wifi_actor_update_credentials_setting(ssid, password);
-    if(err != ESP_OK) {
-        return err;
-    }
+	    if(!app_settings.wifi_enable) {
+	        wifi_actor_clear_pending_credentials();
+	        return ESP_ERR_INVALID_STATE;
+	    }
 
-    err = wifi_module_set_credentials(app_settings.wifi_ssid, app_settings.wifi_password);
-    if(err != ESP_OK) {
-        return err;
-    }
+	    esp_err_t err = wifi_module_set_credentials(ssid, password);
+	    if(err != ESP_OK) {
+	        return err;
+	    }
 
-    if(app_settings.wifi_enable) {
-        return wifi_actor_request_disconnect(true);
-    }
-
-    return ESP_OK;
-}
+	    wifi_actor_set_pending_credentials(ssid, password);
+	    return wifi_actor_request_disconnect(true);
+	}
 
 static void wifi_actor_apply_msg(const msg_t *msg)
 {
@@ -325,9 +424,10 @@ static void wifi_actor_apply_msg(const msg_t *msg)
         case MSG_EVT_CMD_WIFI_CONNECT:
             (void)wifi_actor_request_connect();
             break;
-        case MSG_EVT_CMD_WIFI_DISCONNECT:
-            (void)wifi_actor_request_disconnect(false);
-            break;
+	        case MSG_EVT_CMD_WIFI_DISCONNECT:
+	            wifi_actor_clear_pending_credentials();
+	            (void)wifi_actor_request_disconnect(false);
+	            break;
         case MSG_EVT_CMD_WIFI_SET_ENABLE:
             (void)wifi_actor_set_enable(msg->data.value != 0);
             break;
@@ -410,18 +510,23 @@ esp_err_t wifi_actor_init(void)
         return ESP_OK;
     }
 
-    wifi_module_config_t wifi_cfg = wifi_module_default_config();
-    (void)strncpy(wifi_cfg.ssid, app_settings.wifi_ssid, sizeof(wifi_cfg.ssid) - 1);
-    wifi_cfg.ssid[sizeof(wifi_cfg.ssid) - 1] = '\0';
+	    wifi_module_config_t wifi_cfg = wifi_module_default_config();
+	    (void)strncpy(wifi_cfg.ssid, app_settings.wifi_ssid, sizeof(wifi_cfg.ssid) - 1);
+	    wifi_cfg.ssid[sizeof(wifi_cfg.ssid) - 1] = '\0';
     (void)strncpy(wifi_cfg.password, app_settings.wifi_password, sizeof(wifi_cfg.password) - 1);
     wifi_cfg.password[sizeof(wifi_cfg.password) - 1] = '\0';
     wifi_cfg.auto_reconnect = app_settings.wifi_auto_reconnect;
 
     esp_err_t err = wifi_module_init(&wifi_cfg);
-    if(err != ESP_OK) {
-        LOG("wifi_module_init failed: %s", esp_err_to_name(err));
-        return err;
-    }
+	    if(err != ESP_OK) {
+	        LOG("wifi_module_init failed: %s", esp_err_to_name(err));
+	        return err;
+	    }
+
+	    err = wifi_profile_init();
+	    if(err != ESP_OK) {
+	        LOG("wifi_profile_init failed: %s", esp_err_to_name(err));
+	    }
 
     (void)wifi_module_register_event_callback(wifi_actor_wifi_event_cb, NULL);
 
@@ -435,7 +540,8 @@ esp_err_t wifi_actor_init(void)
     s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
     s_actor.connect_after_disconnect = false;
     s_actor.connect_deadline = 0;
-    s_actor.weak_rssi_threshold = app_settings.wifi_weak_rssi_threshold;
+	    s_actor.weak_rssi_threshold = app_settings.wifi_weak_rssi_threshold;
+	    wifi_actor_set_active_credentials(app_settings.wifi_ssid, app_settings.wifi_password);
 
     BaseType_t ok = xTaskCreatePinnedToCore(
         wifi_actor_task,
@@ -456,9 +562,9 @@ esp_err_t wifi_actor_init(void)
         return ESP_FAIL;
     }
 
-    if(app_settings.wifi_enable) {
-        (void)wifi_module_start();
-    }
+	    if(app_settings.wifi_enable) {
+	        (void)wifi_actor_start_auto_flow();
+	    }
 
     // LOG("wifi actor init done");
     return ESP_OK;

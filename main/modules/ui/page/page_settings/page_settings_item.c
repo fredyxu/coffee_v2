@@ -68,40 +68,46 @@ static void focus_activate_from_touch(page_settings_item_focus_item_t *focus, vo
 
 
 
-void static input_handler(const msg_t *msg) {
+static void input_handler(const msg_t *msg)
+{
 	switch(msg->type) {
-	case MSG_TYPE_INPUT:
-		if(s_keyboard != NULL) {
-			ui_keyboard_handle_input(s_keyboard, msg);
-			return;
-		}
+		case MSG_TYPE_INPUT:
+			if(ui_note_is_visible()) {
+				ui_note_handle_input(msg);
+				return;
+			}
 
-		switch(msg->event) {		
-			case MSG_EVT_INPUT_ENCODER_CW:
-				focus_rotate(+1);
-				break;
-			case MSG_EVT_INPUT_ENCODER_CCW:
-				focus_rotate(-1);
-				break;
-			case MSG_EVT_INPUT_ENCODER_PRESS:
-				focus_press();
-				break;
-			case MSG_EVT_INPUT_ENCODER_LONG_PRESS:
-				LOG("输入事件: 编码器长按");
-				break;
-			default:
-				LOG("输入事件: 未处理的事件类型 %d", msg->event);
-				break;
-		}
+			if(s_keyboard != NULL) {
+				ui_keyboard_handle_input(s_keyboard, msg);
+				return;
+			}
 
-		break;
-	case MSG_TYPE_CMD:
-		LOG("命令事件: 事件 %d", msg->event);
-		break;
+			switch(msg->event) {
+				case MSG_EVT_INPUT_ENCODER_CW:
+					focus_rotate(+1);
+					break;
+				case MSG_EVT_INPUT_ENCODER_CCW:
+					focus_rotate(-1);
+					break;
+				case MSG_EVT_INPUT_ENCODER_PRESS:
+					focus_press();
+					break;
+				case MSG_EVT_INPUT_ENCODER_LONG_PRESS:
+					LOG("输入事件: 编码器长按");
+					break;
+				default:
+					LOG("输入事件: 未处理的事件类型 %d", msg->event);
+					break;
+			}
 
-	case MSG_TYPE_SYS:
-		LOG("系统事件: 事件 %d", msg->event);
-		break;
+			break;
+		case MSG_TYPE_CMD:
+			LOG("命令事件: 事件 %d", msg->event);
+			break;
+
+		case MSG_TYPE_SYS:
+			LOG("系统事件: 事件 %d", msg->event);
+			break;
 	}
 }
 
@@ -190,16 +196,16 @@ static void focus_press(void)
 		return;
 	}
 
-		switch(focus->value_type) {
-			case SETTINGS_VALUE_TYPE_LIST:
-				if(focus->list_item != NULL && focus->list_item->on_action != NULL) {
-					(void)page_settings_binding_press(focus);
-					break;
-				}
+	switch(focus->value_type) {
+		case SETTINGS_VALUE_TYPE_LIST:
+			if(focus->list_item != NULL && focus->list_item->on_action != NULL) {
+				(void)page_settings_binding_press(focus);
+				break;
+			}
 
-				if(focus->sub_item_id == SETTINGS_SUB_ITEM_ID_WIFI_SSID_LIST) {
-					focus_open_wifi_password_keyboard(focus);
-				}
+			if(focus->sub_item_id == SETTINGS_SUB_ITEM_ID_WIFI_SSID_LIST) {
+				focus_open_wifi_password_keyboard(focus);
+			}
 			break;
 
 		default:
@@ -365,18 +371,11 @@ void page_settings_item_show(lv_obj_t *p, settings_item_id_t id) {
 	s_current_item_id = id;
 	s_keyboard = NULL;
 	list_views_reset();
-    page_settings_item_style_init();
-    page_body = lv_obj_create(p);
-    lv_obj_add_style(page_body, &style_page_body, LV_STATE_DEFAULT);
-    ui_add_top_status(page_body);
-    create_page();
-
-	static ui_note_ctx_t note_ctx = {
-		.type = MSG,
-		.title = "这是一个提示",
-	};
-
-	ui_note_show(&note_ctx);
+	page_settings_item_style_init();
+	page_body = lv_obj_create(p);
+	lv_obj_add_style(page_body, &style_page_body, LV_STATE_DEFAULT);
+	ui_add_top_status(page_body);
+	create_page();
 
 	ui_actor_set_ops(&page_settings_item_ops);
 }
