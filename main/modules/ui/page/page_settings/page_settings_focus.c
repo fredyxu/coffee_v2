@@ -44,7 +44,8 @@ static int focus_find_index_by_obj(lv_obj_t *obj)
 
 static void focus_touch_event_cb(lv_event_t *e)
 {
-	if(lv_event_get_code(e) != LV_EVENT_CLICKED) {
+	lv_event_code_t code = lv_event_get_code(e);
+	if(code != LV_EVENT_PRESSED && code != LV_EVENT_CLICKED) {
 		return;
 	}
 
@@ -54,6 +55,10 @@ static void focus_touch_event_cb(lv_event_t *e)
 	}
 
 	page_settings_focus_set_index(index);
+
+	if(code == LV_EVENT_PRESSED) {
+		return;
+	}
 
 	page_settings_item_focus_item_t *focus = page_settings_focus_current();
 	if(focus != NULL && s_activate_cb != NULL) {
@@ -210,6 +215,7 @@ static bool focus_add_at(const settings_sub_item_t *item,
 	s_focus[index] = focus_item;
 
 	lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+	lv_obj_add_event_cb(row, focus_touch_event_cb, LV_EVENT_PRESSED, NULL);
 	lv_obj_add_event_cb(row, focus_touch_event_cb, LV_EVENT_CLICKED, NULL);
 
 	s_focus_count++;

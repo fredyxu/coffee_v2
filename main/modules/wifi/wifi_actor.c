@@ -20,6 +20,7 @@
 
 #define WIFI_ACTOR_INBOX_Q_LEN 8
 #define WIFI_ACTOR_CONNECT_TIMEOUT_TICKS pdMS_TO_TICKS(15000)
+#define WIFI_ACTOR_SIGNAL_POLL_TICKS pdMS_TO_TICKS(5000)
 
 typedef enum {
     WIFI_ACTOR_CONN_IDLE = 0,
@@ -33,16 +34,17 @@ typedef struct {
     msg_sub_handle_t sub;
     TaskHandle_t task;
     wifi_actor_conn_state_t conn_state;
-	    bool connect_after_disconnect;
-	    TickType_t connect_deadline;
-	    int last_signal_level;
-	    int weak_rssi_threshold;
-	    bool has_pending_credentials;
-	    char pending_ssid[33];
-	    char pending_password[65];
-	    char active_ssid[33];
-	    char active_password[65];
-	} wifi_actor_ctx_t;
+    bool connect_after_disconnect;
+    TickType_t connect_deadline;
+    TickType_t next_signal_poll_tick;
+    int last_signal_level;
+    int weak_rssi_threshold;
+    bool has_pending_credentials;
+    char pending_ssid[33];
+    char pending_password[65];
+    char active_ssid[33];
+    char active_password[65];
+} wifi_actor_ctx_t;
 
 static wifi_actor_ctx_t s_actor = {0};
 
@@ -55,17 +57,19 @@ static bool wifi_actor_tick_reached(TickType_t now, TickType_t deadline)
 
 static int wifi_actor_calc_signal_level(int rssi, int weak_threshold)
 {
-    if(rssi <= weak_threshold) {
+    (void)weak_threshold;
+
+    if(rssi <= -85) {
         return 1;
     }
-    if(rssi <= weak_threshold + 8) {
+    if(rssi <= -75) {
         return 2;
     }
-    if(rssi <= weak_threshold + 15) {
+    if(rssi <= -65) {
         return 3;
     }
-	    return 4;
-	}
+    return 4;
+}
 
 static void wifi_actor_clear_pending_credentials(void)
 {
@@ -245,6 +249,7 @@ static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
 	            s_actor.conn_state = WIFI_ACTOR_CONN_CONNECTED;
 	            s_actor.connect_after_disconnect = false;
 	            s_actor.connect_deadline = 0;
+	            s_actor.next_signal_poll_tick = 0;
 	            if(s_actor.has_pending_credentials) {
 	                (void)wifi_profile_save_success(s_actor.pending_ssid, s_actor.pending_password);
 	                (void)wifi_actor_persist_connected_credentials(s_actor.pending_ssid, s_actor.pending_password);
@@ -476,7 +481,13 @@ static void wifi_actor_task(void *arg)
         }
 
         wifi_actor_check_connect_timeout();
-        wifi_actor_poll_signal_quality();
+
+        TickType_t now = xTaskGetTickCount();
+        if(s_actor.next_signal_poll_tick == 0 ||
+           wifi_actor_tick_reached(now, s_actor.next_signal_poll_tick)) {
+            s_actor.next_signal_poll_tick = now + WIFI_ACTOR_SIGNAL_POLL_TICKS;
+            wifi_actor_poll_signal_quality();
+        }
     }
 }
 
@@ -540,8 +551,9 @@ esp_err_t wifi_actor_init(void)
     s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
     s_actor.connect_after_disconnect = false;
     s_actor.connect_deadline = 0;
-	    s_actor.weak_rssi_threshold = app_settings.wifi_weak_rssi_threshold;
-	    wifi_actor_set_active_credentials(app_settings.wifi_ssid, app_settings.wifi_password);
+    s_actor.next_signal_poll_tick = 0;
+    s_actor.weak_rssi_threshold = app_settings.wifi_weak_rssi_threshold;
+    wifi_actor_set_active_credentials(app_settings.wifi_ssid, app_settings.wifi_password);
 
     BaseType_t ok = xTaskCreatePinnedToCore(
         wifi_actor_task,
@@ -591,5 +603,6 @@ esp_err_t wifi_actor_deinit(void)
     s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;
     s_actor.connect_after_disconnect = false;
     s_actor.connect_deadline = 0;
+    s_actor.next_signal_poll_tick = 0;
     return wifi_module_deinit();
 }

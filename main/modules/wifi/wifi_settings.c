@@ -11,21 +11,7 @@
 
 #define WIFI_SETTINGS_SSID_MAX 16
 
-static settings_value_list_t s_wifi_ssid_list[WIFI_SETTINGS_SSID_MAX] = {
-	0
-	// {
-	// 	.type = SETTINGS_LIST_ITEM_STATUS,
-	// 	.disabled = false,
-	// 	.title = "SSID_1",
-	// 	.selected = true,
-	// },
-	// {
-	// 	.type = SETTINGS_LIST_ITEM_STATUS,
-	// 	.disabled = false,
-	// 	.title = "SSID_2",
-	// 	.selected = false,
-	// }
-};
+static settings_value_list_t s_wifi_ssid_list[WIFI_SETTINGS_SSID_MAX] = {0};
 
 static size_t s_wifi_ssid_count;
 
