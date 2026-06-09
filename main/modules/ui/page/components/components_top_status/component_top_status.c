@@ -10,7 +10,8 @@
 
 #define TOP_STATUS_ICON_HEIGHT 20
 #define STATUS_SIZE 5
-#define TOP_STATUS_BG_COLOR UI_COLOR_PANEL_2
+// #define TOP_STATUS_BG_COLOR UI_COLOR_PANEL_2
+#define TOP_STATUS_BG_COLOR UI_COLOR_PANEL
 
 static lv_obj_t *status_body;
 static lv_obj_t *obj_status_body;
@@ -18,12 +19,12 @@ static lv_obj_t *obj_icon_body;
 
 static lv_obj_t *obj_icon_wifi;
 static lv_obj_t *obj_icon_link;
-static lv_obj_t *obj_icon_bt;
+// static lv_obj_t *obj_icon_bt;
 static lv_obj_t *obj_status;
 
 static lv_obj_t *label_icon_wifi;
 static lv_obj_t *label_icon_link;
-static lv_obj_t *label_icon_bt;
+// static lv_obj_t *label_icon_bt;
 static lv_obj_t *label_status;
 
 static lv_style_t style_body;

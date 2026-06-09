@@ -15,6 +15,7 @@
 #include "modules/ui/style/ui_style.h"
 #include "modules/ui/page/page_settings/page_settings_data.h"
 #include "modules/ui/page/components/component_note/component_note.h"
+#include "modules/ui/ui.h"
 
 
 #define SETTINGS_PAGE_WIDTH DISPLAY_H_RES - CONFIG_UI_MARGIN * 2
@@ -25,11 +26,12 @@
 
 
 
-static settings_item_id_t current_item_id = SETTINGS_ITEM_ID_BACK;
+// static settings_item_id_t current_item_id = SETTINGS_ITEM_ID_BACK;
 static lv_obj_t *page_body;
 static lv_obj_t *settings_body;
 
 
+// static lv_style_t style_page_body;
 static lv_style_t style_item_body;
 static lv_style_t style_item_title_body;
 static lv_style_t style_item_value_body;
@@ -37,6 +39,28 @@ static lv_style_t style_item_title_label;
 static lv_style_t style_item_value_label;
 
 static bool style_init_done = false;
+
+static void settings_item_clicked_cb(lv_event_t *e)
+{
+	if(lv_event_get_code(e) != LV_EVENT_CLICKED) {
+		return;
+	}
+
+	const settings_item_t *item = (const settings_item_t *)lv_event_get_user_data(e);
+	if(item == NULL) {
+		return;
+	}
+
+	if(item->id == SETTINGS_ITEM_ID_BACK) {
+		ui_nav_back();
+		return;
+	}
+
+	ui_nav_go((ui_page_nav_param_t) {
+		.page_id = PAGE_SETTINGS_ITEM,
+		.settings_item_id = item->id,
+	});
+}
 
 void insert_settings_items() {
 	if(page_body == NULL) {
@@ -53,6 +77,8 @@ void insert_settings_items() {
 		lv_obj_t *item_body = lv_obj_create(settings_body);
 		lv_obj_add_style(item_body, &style_item_body, 0);
 		lv_obj_remove_flag(item_body, LV_OBJ_FLAG_SCROLLABLE);
+		lv_obj_add_flag(item_body, LV_OBJ_FLAG_CLICKABLE);
+		lv_obj_add_event_cb(item_body, settings_item_clicked_cb, LV_EVENT_CLICKED, (void *)&items[i]);
 
 		lv_obj_t *item_title_body = lv_obj_create(item_body);
 		lv_obj_add_style(item_title_body, &style_item_title_body, 0);
@@ -122,8 +148,6 @@ void style_init(void) {
 	lv_style_set_flex_main_place(&style_item_body, LV_FLEX_ALIGN_CENTER);
 	lv_style_set_flex_cross_place(&style_item_body, LV_FLEX_ALIGN_CENTER);
 	lv_style_set_flex_track_place(&style_item_body, LV_FLEX_ALIGN_CENTER);
-
-
 
 	// 标题样式
 	lv_style_init(&style_item_title_body);

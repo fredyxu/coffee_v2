@@ -18,7 +18,9 @@
 #define UI_ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 static ui_nav_t ui_nav = {0};
-static ui_page_id_t s_current_page = -1;
+static ui_page_nav_param_t s_current_page = {
+	.page_id = PAGE_NONE,
+};
 
 static lv_obj_t *screen;
 
@@ -26,8 +28,8 @@ static void ui_screen_init() {
 	screen = lv_scr_act();
 }
 
-static void ui_nav_push(ui_page_id_t page_id) {
-	if(s_current_page >= 0 && s_current_page < PAGE_NONE) {
+static void ui_nav_push_current(void) {
+	if(s_current_page.page_id >= PAGE_INIT && s_current_page.page_id < PAGE_NONE) {
 		if(ui_nav.depth < UI_ARRAY_SIZE(ui_nav.stack)) {
 			ui_nav.stack[ui_nav.depth++] = s_current_page;
 		} else {
@@ -40,13 +42,13 @@ static void ui_nav_push(ui_page_id_t page_id) {
 
 /**
  * @brief 切换当前页面
- * @param page_id 目标页面枚举
+ * @param param 目标页面和页面参数
  * @return ESP_OK 成功，其他表示参数或状态有误
  */
-static esp_err_t page_show(ui_page_id_t page_id) {
+static esp_err_t page_show(ui_page_nav_param_t param) {
 	ui_actor_clean_ops();
-    if(page_id < PAGE_INIT || page_id > PAGE_NONE) {
-        LOG("无效的页面 ID: %d", page_id);
+    if(param.page_id < PAGE_INIT || param.page_id >= PAGE_NONE) {
+        LOG("无效的页面 ID: %d", param.page_id);
         return ESP_ERR_INVALID_ARG;
     }
     
@@ -54,14 +56,15 @@ static esp_err_t page_show(ui_page_id_t page_id) {
         LOG("当前没有活动屏幕");
         return ESP_ERR_INVALID_STATE;
     }
-    if(page_id == s_current_page) {
-        LOG("页面已在显示: %d", page_id);
+    if(param.page_id == s_current_page.page_id &&
+       param.settings_item_id == s_current_page.settings_item_id) {
+        LOG("页面已在显示: %d", param.page_id);
         return ESP_OK;
     }
 
     lv_obj_clean(screen);
 
-    switch(page_id) {
+    switch(param.page_id) {
     case PAGE_INIT:
         page_init_show(screen);
         break;
@@ -70,7 +73,7 @@ static esp_err_t page_show(ui_page_id_t page_id) {
         page_home_show(screen);
         break;
     case PAGE_SETTINGS_ITEM:
-		page_settings_item_show(screen, SETTINGS_ITEM_ID_WIFI);
+		page_settings_item_show(screen, param.settings_item_id);
         break;
     case PAGE_SETTINGS:
 		page_settings_show(screen);
@@ -78,7 +81,7 @@ static esp_err_t page_show(ui_page_id_t page_id) {
     default:
         return ESP_ERR_NOT_SUPPORTED;
     }
-	s_current_page = page_id;
+	s_current_page = param;
     return ESP_OK;
 }
 
@@ -90,7 +93,9 @@ static void ui_create(void *arg)
 	ui_style_init();
 	ui_screen_init();
 	// page_show(PAGE_SETTINGS_ITEM);
-	ui_nav_go(PAGE_SETTINGS_ITEM);
+	ui_nav_go((ui_page_nav_param_t) {
+		.page_id = PAGE_SETTINGS,
+	});
 	// page_settings_item_show(screen, 0);
 }
 
@@ -109,16 +114,16 @@ esp_err_t ui_init(void)
 
 void ui_nav_back(void) {
 	if(ui_nav.depth > 0) {
-		ui_page_id_t id = ui_nav.stack[--ui_nav.depth];
-		page_show(id);
+		ui_page_nav_param_t param = ui_nav.stack[--ui_nav.depth];
+		page_show(param);
 	} else {
 		LOG("导航栈已空，无法返回");
 	}
 }
 
-void ui_nav_go(ui_page_id_t id) {
-	ui_nav_push(id);
-	page_show(id);
+void ui_nav_go(ui_page_nav_param_t param) {
+	ui_nav_push_current();
+	page_show(param);
 }
 
 void ui_nav_back_action(const settings_sub_item_t *item)
