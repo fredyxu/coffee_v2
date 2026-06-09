@@ -5,82 +5,9 @@
 此项目为Coffee项目的再次重启，使用的硬件有所调整。增加了麦克风，计划扩展网络对讲功能。
 
 
-## 0. 项目进度
-
-已完成：
-- [x] 核心消息链路
-- [x] 硬件初始化
-
-计划：
-- [ ] UI
 
 
-## 1. 功能概览
-
-- 摩尔斯电相关训练练习
-- 网络联通
-- 网络对讲
-
-## 2. 快速开始
-
-### 2.1 环境要求
-
-- ESP-IDF `>= 5.5.4`
-- LVGL `>= 9.5`
-
-### 2.2 编译
-
-在项目根目录执行：
-
-```bash
-idf.py build
-```
-
-### 2.3 烧录与串口
-
-```bash
-idf.py -p <PORT> flash monitor
-```
-
-例如：
-
-```bash
-idf.py -p /dev/tty.usbmodemXXX flash monitor
-```
-
-## 3. 目录说明
-
-```text
-main/
-  app/            启动初始化
-  core/           con / state / msg 等核心模块
-  modules/        ui / input / audio / mic / display
-  config/         引脚与系统参数
-doc/              项目文档与每日更新日志
-```
-
-### 3.1 文档入口
-
-- 文档目录：[doc/README.md](doc/README.md)
-- 每日更新日志：[doc/daily/2026-04-26.md](doc/daily/2026-04-26.md)
-
-
-
-
-## 5. 引脚配置位置
-
-主要引脚定义在：
-
-- `main/config/config_pin.h`
-
-显示与音频参数在：
-
-- `main/config/config_sys_display.h`
-- `main/config/config_sys_audio.h`
-
-如果你的硬件接线不同，优先修改这几个配置文件。
-
-## 6. BOM
+## 0. BOM
 
 > 下面是当前代码默认配置对应的一套参考 BOM。  
 > 不同厂商型号可替换，但接口与电气参数要匹配。
@@ -98,7 +25,7 @@ doc/              项目文档与每日更新日志
 | 供电 | 5V 电源/USB 供电 | 1 | 满足主控 + 屏幕 + 音频峰值电流 |
 | 连接 | 杜邦线/焊接导线/排针 | 若干 | 连接各模块 |
 
-## 7. 详细引脚接线表
+## 1. 详细引脚接线表
 
 以 `main/config/config_pin.h` 为准。下表为当前代码默认接线。
 
