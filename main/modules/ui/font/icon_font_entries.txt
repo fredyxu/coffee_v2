@@ -1,6 +1,7 @@
-/Users/Fredy/code/zclub/coffee/main/modules/ui/font/iconfont/link.ttf	0xE9CB
-/Users/Fredy/code/zclub/coffee/main/modules/ui/font/iconfont/wifi_1.ttf	0xE900
-/Users/Fredy/code/zclub/coffee/main/modules/ui/font/iconfont/wifi_2.ttf	0xE901
-/Users/Fredy/code/zclub/coffee/main/modules/ui/font/iconfont/wifi_3.ttf	0xE902
-/Users/Fredy/code/zclub/coffee/main/modules/ui/font/iconfont/wifi_full.ttf	0xE903
-/Users/Fredy/code/zclub/coffee/main/modules/ui/font/iconfont/wifi_no.ttf	0xE905
+/Users/Fredy/code/zclub/coffee/main/modules/ui/font/iconfont/link_ws_break.ttf	0xE900	0xE906
+/Users/Fredy/code/zclub/coffee/main/modules/ui/font/iconfont/link_ws_done.ttf	0xE9CB	0xE907
+/Users/Fredy/code/zclub/coffee/main/modules/ui/font/iconfont/wifi_1.ttf	0xE900	0xE900
+/Users/Fredy/code/zclub/coffee/main/modules/ui/font/iconfont/wifi_2.ttf	0xE901	0xE901
+/Users/Fredy/code/zclub/coffee/main/modules/ui/font/iconfont/wifi_3.ttf	0xE902	0xE902
+/Users/Fredy/code/zclub/coffee/main/modules/ui/font/iconfont/wifi_full.ttf	0xE903	0xE903
+/Users/Fredy/code/zclub/coffee/main/modules/ui/font/iconfont/wifi_no.ttf	0xE905	0xE904

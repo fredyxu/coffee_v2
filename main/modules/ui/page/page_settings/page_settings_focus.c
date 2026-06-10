@@ -16,6 +16,8 @@ static void *s_activate_user_data;
 static bool focus_item_can_focus(settings_value_type_t value_type)
 {
 	switch(value_type) {
+		case SETTINGS_VALUE_TYPE_TEXT:
+		case SETTINGS_VALUE_TYPE_PASSWORD:
 		case SETTINGS_VALUE_TYPE_BOOL:
 		case SETTINGS_VALUE_TYPE_INT:
 		case SETTINGS_VALUE_TYPE_LIST:
@@ -201,6 +203,11 @@ static bool focus_add_at(const settings_sub_item_t *item,
 
 			case SETTINGS_VALUE_TYPE_INT:
 				focus_item.value_int = *(int *)item->value;
+				break;
+
+			case SETTINGS_VALUE_TYPE_TEXT:
+			case SETTINGS_VALUE_TYPE_PASSWORD:
+				(void)snprintf(focus_item.value_str, sizeof(focus_item.value_str), "%s", (const char *)item->value);
 				break;
 
 			default:

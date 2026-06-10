@@ -21,6 +21,11 @@ typedef enum {
     APP_SETTING_ID_WIFI_PASSWORD,
     APP_SETTING_ID_WIFI_AUTO_RECONNECT,
     APP_SETTING_ID_WIFI_WEAK_RSSI_THRESHOLD,
+    APP_SETTING_ID_WS_ENABLE,
+    APP_SETTING_ID_WS_URL,
+    APP_SETTING_ID_WS_ROOM,
+    APP_SETTING_ID_WS_CALLSIGN,
+    APP_SETTING_ID_WS_AUTO_RECONNECT,
     APP_SETTING_ID_AUDIO_VOLUME,
     APP_SETTING_ID_DISPLAY_BRIGHTNESS,
     APP_SETTING_ID_MAX,
@@ -43,6 +48,11 @@ typedef struct {
     char wifi_password[65];
     bool wifi_auto_reconnect;
     int32_t wifi_weak_rssi_threshold;
+    bool ws_enable;
+    char ws_url[129];
+    char ws_room[33];
+    char ws_callsign[17];
+    bool ws_auto_reconnect;
     int32_t audio_volume;
     int32_t display_brightness;
 } app_settings_t;

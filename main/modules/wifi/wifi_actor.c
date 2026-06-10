@@ -354,18 +354,28 @@ static esp_err_t wifi_actor_start_auto_flow(void)
 {
 	esp_err_t err = wifi_module_start();
 	if(err != ESP_OK) {
+		LOG("wifi auto flow start failed: %s", esp_err_to_name(err));
 		return err;
 	}
 
-	if(wifi_profile_count() > 0) {
+	size_t profile_count = wifi_profile_count();
+	LOG("wifi auto flow: enable=%d profile_count=%u saved_ssid=%s",
+	    app_settings.wifi_enable ? 1 : 0,
+	    (unsigned)profile_count,
+	    app_settings.wifi_ssid[0] != '\0' ? app_settings.wifi_ssid : "(empty)");
+
+	if(profile_count > 0) {
+		LOG("wifi auto flow: scan saved profiles");
 		return wifi_actor_scan_networks();
 	}
 
 	if(app_settings.wifi_ssid[0] != '\0') {
+		LOG("wifi auto flow: connect saved ssid=%s", app_settings.wifi_ssid);
 		wifi_actor_set_active_credentials(app_settings.wifi_ssid, app_settings.wifi_password);
 		return wifi_actor_request_connect();
 	}
 
+	LOG("wifi auto flow: no saved profile, scan only");
 	return wifi_actor_scan_networks();
 }
 

@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include "app/app_settings.h"
 #include "modules/ui/page/components/components_top_status/component_top_status.h"
 #include "modules/ui/page/components/component_keyboard/component_keyboard.h"
 #include "modules/ui/page/page_settings/page_settings_binding.h"
@@ -21,6 +22,7 @@ static lv_obj_t *page_body;
 static lv_obj_t *s_keyboard;
 static char s_selected_wifi_ssid[33];
 static char s_wifi_password[65];
+static char s_settings_text_buffer[129];
 static settings_item_id_t s_current_item_id;
 
 #define PAGE_SETTINGS_LIST_VIEW_MAX 8
@@ -149,6 +151,38 @@ static void wifi_password_keyboard_event_cb(ui_keyboard_event_t event, const cha
 	}
 }
 
+static void settings_text_keyboard_event_cb(ui_keyboard_event_t event, const char *text, void *user_data)
+{
+	page_settings_item_focus_item_t *focus = (page_settings_item_focus_item_t *)user_data;
+
+	switch(event) {
+		case UI_KEYBOARD_EVT_SUBMIT:
+			if(focus != NULL && focus->item != NULL && focus->item->has_setting_id) {
+				esp_err_t err = app_settings_update(&(app_settings_update_t) {
+					.id = focus->item->setting_id,
+					.value.str = text ? text : "",
+				});
+				if(err != ESP_OK) {
+					LOG("settings text update failed: id=%d err=%d", focus->item->setting_id, err);
+				}
+				if(focus->value_label != NULL) {
+					lv_label_set_text(focus->value_label, text ? text : "");
+				}
+				(void)snprintf(focus->value_str, sizeof(focus->value_str), "%s", text ? text : "");
+			}
+			s_keyboard = NULL;
+			break;
+
+		case UI_KEYBOARD_EVT_CANCEL:
+			s_keyboard = NULL;
+			break;
+
+		case UI_KEYBOARD_EVT_CHANGED:
+		default:
+			break;
+	}
+}
+
 static void focus_activate_from_touch(page_settings_item_focus_item_t *focus, void *user_data)
 {
 	if(focus != NULL && (focus->value_type == SETTINGS_VALUE_TYPE_LIST || focus->value_type == SETTINGS_VALUE_TYPE_ACTION)) {
@@ -189,6 +223,30 @@ static void focus_open_wifi_password_keyboard(page_settings_item_focus_item_t *f
 	});
 }
 
+static void focus_open_settings_text_keyboard(page_settings_item_focus_item_t *focus)
+{
+	if(focus == NULL || focus->item == NULL || s_keyboard != NULL) {
+		return;
+	}
+
+	const char *current = "";
+	if(focus->item->value != NULL) {
+		current = (const char *)focus->item->value;
+	}
+	(void)snprintf(s_settings_text_buffer, sizeof(s_settings_text_buffer), "%s", current ? current : "");
+
+	s_keyboard = ui_keyboard_modal_create(&(ui_keyboard_config_t) {
+		.parent = page_body ? page_body : lv_scr_act(),
+		.title = focus->item->title,
+		.placeholder = focus->item->title,
+		.buffer = s_settings_text_buffer,
+		.buffer_size = sizeof(s_settings_text_buffer),
+		.password_mode = focus->value_type == SETTINGS_VALUE_TYPE_PASSWORD,
+		.on_event = settings_text_keyboard_event_cb,
+		.user_data = focus,
+	});
+}
+
 static void focus_press(void)
 {
 	page_settings_item_focus_item_t *focus = page_settings_focus_current();
@@ -197,6 +255,11 @@ static void focus_press(void)
 	}
 
 	switch(focus->value_type) {
+		case SETTINGS_VALUE_TYPE_TEXT:
+		case SETTINGS_VALUE_TYPE_PASSWORD:
+			focus_open_settings_text_keyboard(focus);
+			break;
+
 		case SETTINGS_VALUE_TYPE_LIST:
 			if(focus->list_item != NULL && focus->list_item->on_action != NULL) {
 				(void)page_settings_binding_press(focus);

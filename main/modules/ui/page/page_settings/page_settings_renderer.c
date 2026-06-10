@@ -129,12 +129,18 @@ void page_settings_renderer_insert_text(lv_obj_t *parent, const settings_sub_ite
 	}
 
 	lv_obj_t *obj_body = lv_obj_create(parent);
-	lv_obj_t *obj_title_label = lv_label_create(obj_body);
+	lv_obj_t *obj_title_body = lv_obj_create(obj_body);
+	lv_obj_t *obj_title_label = lv_label_create(obj_title_body);
+	lv_obj_t *obj_value_label = lv_label_create(obj_title_body);
 	lv_label_set_text(obj_title_label, item->title ? item->title : "");
+	lv_label_set_text(obj_value_label, item->value != NULL ? (const char *)item->value : "");
 
 	page_settings_item_apply_style_page_item_text(obj_body);
 	lv_obj_set_style_text_font(obj_title_label, UI_FONT_12, 0);
 	lv_obj_set_style_text_color(obj_title_label, UI_COLOR_TEXT, 0);
+	lv_obj_set_style_text_font(obj_value_label, UI_FONT_12, 0);
+	lv_obj_set_style_text_color(obj_value_label, UI_COLOR_TEXT_MUTED, 0);
+	page_settings_focus_add(item, obj_body, NULL, obj_value_label, false);
 	ui_style_insert_line_1(parent);
 }
 

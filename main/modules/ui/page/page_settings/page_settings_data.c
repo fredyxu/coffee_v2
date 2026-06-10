@@ -3,6 +3,7 @@
 #include "modules/ui/page/page_settings/sections/page_settings_section_audio.h"
 #include "modules/ui/page/page_settings/sections/page_settings_section_display.h"
 #include "modules/ui/page/page_settings/sections/page_settings_section_wifi.h"
+#include "modules/ui/page/page_settings/sections/page_settings_section_ws.h"
 
 static const settings_item_t s_settings_items[] = {
     {
@@ -69,6 +70,9 @@ const settings_sub_item_t *page_settings_get_sub_items(settings_item_id_t id, si
 
     case SETTINGS_ITEM_ID_DISPLAY:
         return page_settings_section_display_get_sub_items(count);
+
+    case SETTINGS_ITEM_ID_WS:
+        return page_settings_section_ws_get_sub_items(count);
 
     default:
         return NULL;

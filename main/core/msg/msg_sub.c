@@ -162,6 +162,11 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
             *out_topic = MSG_TOPIC_WIFI_CMD;
             return ESP_OK;
 
+        case MSG_EVT_CMD_WS_SET_ENABLE:
+        case MSG_EVT_CMD_WS_RECONNECT:
+            *out_topic = MSG_TOPIC_WEBSOCKET_CMD;
+            return ESP_OK;
+
         case MSG_EVT_SYS_WIFI_CONNECTED:
         case MSG_EVT_SYS_WIFI_DISCONNECTED:
         case MSG_EVT_SYS_WIFI_SIGNAL_LEVEL:

@@ -19,6 +19,7 @@
 #endif
 
 #define APP_SETTINGS_NS_WIFI "wifi"
+#define APP_SETTINGS_NS_WS "ws"
 #define APP_SETTINGS_NS_AUDIO "audio"
 #define APP_SETTINGS_NS_DISPLAY "display"
 
@@ -92,6 +93,56 @@ static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
         .max_i32 = -30,
         .dirty_bit = (1u << APP_SETTING_ID_WIFI_WEAK_RSSI_THRESHOLD),
 		.default_value.i32 = -70,
+    },
+    [APP_SETTING_ID_WS_ENABLE] = {
+        .id = APP_SETTING_ID_WS_ENABLE,
+        .type = STORE_KV_BOOL,
+        .namespace_name = APP_SETTINGS_NS_WS,
+        .key = "enable",
+        .target = &app_settings.ws_enable,
+        .target_size = sizeof(app_settings.ws_enable),
+        .dirty_bit = (1u << APP_SETTING_ID_WS_ENABLE),
+		.default_value.b = WS_DEFAULT_ENABLE != 0,
+    },
+    [APP_SETTING_ID_WS_URL] = {
+        .id = APP_SETTING_ID_WS_URL,
+        .type = STORE_KV_STR,
+        .namespace_name = APP_SETTINGS_NS_WS,
+        .key = "url",
+        .target = app_settings.ws_url,
+        .target_size = sizeof(app_settings.ws_url),
+        .dirty_bit = (1u << APP_SETTING_ID_WS_URL),
+		.default_value.str = WS_DEFAULT_URL,
+    },
+    [APP_SETTING_ID_WS_ROOM] = {
+        .id = APP_SETTING_ID_WS_ROOM,
+        .type = STORE_KV_STR,
+        .namespace_name = APP_SETTINGS_NS_WS,
+        .key = "room",
+        .target = app_settings.ws_room,
+        .target_size = sizeof(app_settings.ws_room),
+        .dirty_bit = (1u << APP_SETTING_ID_WS_ROOM),
+		.default_value.str = WS_DEFAULT_ROOM,
+    },
+    [APP_SETTING_ID_WS_CALLSIGN] = {
+        .id = APP_SETTING_ID_WS_CALLSIGN,
+        .type = STORE_KV_STR,
+        .namespace_name = APP_SETTINGS_NS_WS,
+        .key = "callsign",
+        .target = app_settings.ws_callsign,
+        .target_size = sizeof(app_settings.ws_callsign),
+        .dirty_bit = (1u << APP_SETTING_ID_WS_CALLSIGN),
+		.default_value.str = WS_DEFAULT_CALLSIGN,
+    },
+    [APP_SETTING_ID_WS_AUTO_RECONNECT] = {
+        .id = APP_SETTING_ID_WS_AUTO_RECONNECT,
+        .type = STORE_KV_BOOL,
+        .namespace_name = APP_SETTINGS_NS_WS,
+        .key = "auto_reconnect",
+        .target = &app_settings.ws_auto_reconnect,
+        .target_size = sizeof(app_settings.ws_auto_reconnect),
+        .dirty_bit = (1u << APP_SETTING_ID_WS_AUTO_RECONNECT),
+		.default_value.b = WS_DEFAULT_AUTO_RECONNECT != 0,
     },
     [APP_SETTING_ID_AUDIO_VOLUME] = {
         .id = APP_SETTING_ID_AUDIO_VOLUME,
@@ -263,6 +314,16 @@ static void *app_settings_snapshot_target(const app_settings_t *snapshot, app_se
             return (void *)&snapshot->wifi_auto_reconnect;
         case APP_SETTING_ID_WIFI_WEAK_RSSI_THRESHOLD:
             return (void *)&snapshot->wifi_weak_rssi_threshold;
+        case APP_SETTING_ID_WS_ENABLE:
+            return (void *)&snapshot->ws_enable;
+        case APP_SETTING_ID_WS_URL:
+            return (void *)snapshot->ws_url;
+        case APP_SETTING_ID_WS_ROOM:
+            return (void *)snapshot->ws_room;
+        case APP_SETTING_ID_WS_CALLSIGN:
+            return (void *)snapshot->ws_callsign;
+        case APP_SETTING_ID_WS_AUTO_RECONNECT:
+            return (void *)&snapshot->ws_auto_reconnect;
         case APP_SETTING_ID_AUDIO_VOLUME:
             return (void *)&snapshot->audio_volume;
         case APP_SETTING_ID_DISPLAY_BRIGHTNESS:

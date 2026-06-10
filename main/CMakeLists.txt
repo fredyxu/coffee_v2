@@ -27,5 +27,5 @@ idf_component_register(
 		"modules"
 		"core"
 
-	REQUIRES esp_lcd driver esp_timer lvgl esp_wifi esp_event esp_netif nvs_flash
+	REQUIRES esp_lcd driver esp_timer lvgl esp_wifi esp_event esp_netif nvs_flash esp_websocket_client mbedtls
 )

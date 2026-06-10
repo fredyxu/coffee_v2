@@ -8,6 +8,8 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 
+#include "core/utils/log.h"
+
 static esp_err_t store_kv_normalize_err(esp_err_t err)
 {
     return err == ESP_ERR_NVS_NOT_FOUND ? ESP_ERR_NOT_FOUND : err;
@@ -32,11 +34,11 @@ esp_err_t store_kv_init(void)
 #ifdef ESP_PLATFORM
     esp_err_t err = nvs_flash_init();
     if(err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        err = nvs_flash_erase();
-        if(err != ESP_OK) {
-            return err;
-        }
-        err = nvs_flash_init();
+        LOG("NVS init failed without erase: %s", esp_err_to_name(err));
+        return err;
+    }
+    if(err == ESP_ERR_INVALID_STATE) {
+        return ESP_OK;
     }
     return err;
 #else

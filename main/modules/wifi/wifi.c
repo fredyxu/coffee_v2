@@ -7,6 +7,8 @@
 #include "esp_wifi.h"
 #include "nvs_flash.h"
 
+#include "core/utils/log.h"
+
 #ifndef WIFI_AUTH_WPA2_PSK
 #define WIFI_AUTH_WPA2_PSK WIFI_AUTH_WPA_PSK
 #endif
@@ -224,8 +226,11 @@ esp_err_t wifi_module_init(const wifi_module_config_t *cfg)
 
     esp_err_t err = nvs_flash_init();
     if(err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        (void)nvs_flash_erase();
-        err = nvs_flash_init();
+        LOG("wifi nvs init failed without erase: %s", esp_err_to_name(err));
+        return err;
+    }
+    if(err == ESP_ERR_INVALID_STATE) {
+        err = ESP_OK;
     }
     if(err != ESP_OK) {
         return err;

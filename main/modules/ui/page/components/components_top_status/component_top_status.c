@@ -82,7 +82,7 @@ void ui_top_status_ref_icon(void) {
 	}
 	
 
-    lv_obj_set_style_text_opa(label_icon_link, cur.ws_connected ? LV_OPA_100 : LV_OPA_40, 0);
+    lv_label_set_text(label_icon_link, cur.ws_connected ? ICON_LINK_WS_DONE : ICON_LINK_WS_BREAK);
 }
 
 static void init_style(void)
@@ -187,11 +187,11 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 
 	obj_icon_link = lv_obj_create(obj_icon_body);
 	lv_obj_add_style(obj_icon_link, &style_icon, 0);
-	lv_obj_remove_flag(obj_icon_wifi, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_remove_flag(obj_icon_link, LV_OBJ_FLAG_SCROLLABLE);
 
 	label_icon_link = lv_label_create(obj_icon_link);
 	lv_obj_add_style(label_icon_link, &style_icon_label, 0);
-	lv_label_set_text(label_icon_link, ICON_LINK);
+	lv_label_set_text(label_icon_link, ICON_LINK_WS_BREAK);
 	lv_obj_center(label_icon_link);
 
 	obj_status = lv_obj_create(obj_status_body);
