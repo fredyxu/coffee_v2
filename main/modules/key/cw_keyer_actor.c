@@ -164,9 +164,16 @@ static void cw_keyer_task(void *arg)
     (void)arg;
 
     while(1) {
+        if(!cw_keyer_has_active_request()) {
+            msg_t msg;
+            if(xQueueReceive(s_keyer.queue, &msg, portMAX_DELAY) == pdTRUE) {
+                cw_keyer_apply_msg(&msg);
+            }
+            continue;
+        }
+
         cw_keyer_drain_queue();
         if(!cw_keyer_has_active_request()) {
-            vTaskDelay(pdMS_TO_TICKS(5));
             continue;
         }
 
@@ -208,9 +215,9 @@ esp_err_t cw_keyer_actor_init(void)
         "cw_keyer",
         CW_KEYER_TASK_STACK,
         NULL,
-        TASK_PRIO_ENCODER,
+        TASK_PRIO_KEY,
         &s_keyer.task,
-        TASK_CORE_ENCODER
+        TASK_CORE_KEY
     );
     if(ok != pdPASS) {
         (void)msg_unsub(s_keyer.sub_handle, NULL, 0);

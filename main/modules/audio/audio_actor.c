@@ -13,8 +13,8 @@
 #include "core/utils/log.h"
 #include "modules/audio/audio.h"
 
-#define AUDIO_ACTOR_TONE_CHUNK_MS 12
-#define AUDIO_ACTOR_TONE_MAX_SAMPLES 768
+#define AUDIO_ACTOR_TONE_CHUNK_MS 5
+#define AUDIO_ACTOR_TONE_MAX_SAMPLES 256
 #define AUDIO_ACTOR_PI 3.14159265358979323846f
 
 typedef enum {
@@ -245,12 +245,12 @@ esp_err_t audio_actor_init(void)
         return err;
     }
 
-    s_actor.cmd_q = xQueueCreate(16, sizeof(audio_actor_cmd_t));
+    s_actor.cmd_q = xQueueCreate(AUDIO_ACTOR_CMD_QUEUE_LEN, sizeof(audio_actor_cmd_t));
     if(s_actor.cmd_q == NULL) {
         return ESP_ERR_NO_MEM;
     }
 
-    err = msg_actor_queue_create_with_len(16, &s_actor.msg_q);
+    err = msg_actor_queue_create_with_len(AUDIO_ACTOR_MSG_QUEUE_LEN, &s_actor.msg_q);
     if(err != ESP_OK) {
         vQueueDelete(s_actor.cmd_q);
         s_actor.cmd_q = NULL;
@@ -269,7 +269,7 @@ esp_err_t audio_actor_init(void)
         return err;
     }
 
-    s_actor.stream_q = xQueueCreate(24, sizeof(audio_stream_chunk_t));
+    s_actor.stream_q = xQueueCreate(AUDIO_ACTOR_STREAM_QUEUE_LEN, sizeof(audio_stream_chunk_t));
     if(s_actor.stream_q == NULL) {
         (void)msg_unsub(s_actor.sub_handle, NULL, 0);
         vQueueDelete(s_actor.msg_q);
@@ -283,7 +283,7 @@ esp_err_t audio_actor_init(void)
     BaseType_t ok = xTaskCreatePinnedToCore(
         audio_actor_task,
         "audio_actor",
-        6144,
+        AUDIO_ACTOR_TASK_STACK,
         NULL,
         TASK_PRIO_AUDIO,
         &s_actor.task,

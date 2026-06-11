@@ -261,8 +261,11 @@ static void key_actor_task(void *arg)
     key_input_event_t events[KEY_INPUT_COUNT];
     while(1) {
         msg_t msg;
-        while(xQueueReceive(s_actor.queue, &msg, 0) == pdTRUE) {
+        if(xQueueReceive(s_actor.queue, &msg, pdMS_TO_TICKS(KEY_ACTOR_POLL_MS)) == pdTRUE) {
             key_actor_handle_msg(&msg);
+            while(xQueueReceive(s_actor.queue, &msg, 0) == pdTRUE) {
+                key_actor_handle_msg(&msg);
+            }
         }
 
         size_t count = 0;
@@ -273,7 +276,6 @@ static void key_actor_task(void *arg)
         }
 
         key_actor_maybe_append_group_gap(key_actor_now_ms());
-        vTaskDelay(pdMS_TO_TICKS(5));
     }
 }
 
@@ -313,9 +315,9 @@ esp_err_t key_actor_init(void)
         "key_actor",
         KEY_ACTOR_TASK_STACK,
         NULL,
-        TASK_PRIO_ENCODER,
+        TASK_PRIO_KEY,
         &s_actor.task,
-        TASK_CORE_ENCODER
+        TASK_CORE_KEY
     );
     if(ok != pdPASS) {
         (void)msg_unsub(s_actor.sub_handle, NULL, 0);

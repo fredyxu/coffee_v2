@@ -117,12 +117,12 @@ esp_err_t mic_actor_init(void)
         return err;
     }
 
-    s_actor.cmd_q = xQueueCreate(12, sizeof(mic_actor_cmd_t));
+    s_actor.cmd_q = xQueueCreate(MIC_ACTOR_CMD_QUEUE_LEN, sizeof(mic_actor_cmd_t));
     if(s_actor.cmd_q == NULL) {
         return ESP_ERR_NO_MEM;
     }
 
-    s_actor.frame_q = xQueueCreate(24, sizeof(mic_frame_t));
+    s_actor.frame_q = xQueueCreate(MIC_ACTOR_FRAME_QUEUE_LEN, sizeof(mic_frame_t));
     if(s_actor.frame_q == NULL) {
         vQueueDelete(s_actor.cmd_q);
         s_actor.cmd_q = NULL;
@@ -132,7 +132,7 @@ esp_err_t mic_actor_init(void)
     BaseType_t ok = xTaskCreatePinnedToCore(
         mic_actor_task,
         "mic_actor",
-        6144,
+        MIC_ACTOR_TASK_STACK,
         NULL,
         TASK_PRIO_MIC,
         &s_actor.task,

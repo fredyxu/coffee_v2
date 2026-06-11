@@ -1,5 +1,6 @@
 #include "app_init.h"
 #include "app/app_settings.h"
+#include "config/config_sys_audio.h"
 #include "core/utils/log.h"
 #include "esp_err.h"
 #include "core/msg/msg.h"
@@ -117,6 +118,7 @@ esp_err_t app_startup(void) {
 		return err;
 	}
 	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "电键初始化完成.", 0);
+#if MIC_INIT_ON_STARTUP
 	// 初始化麦克风
 	err = mic_actor_init();
 	if(err != ESP_OK) {
@@ -124,6 +126,9 @@ esp_err_t app_startup(void) {
 		return err;
 	}
 	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "麦克风初始化完成.", 0);
+#else
+	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "麦克风延迟初始化.", 0);
+#endif
 
 	
 
