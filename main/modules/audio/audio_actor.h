@@ -21,6 +21,8 @@ esp_err_t audio_actor_init(void);
 esp_err_t audio_actor_deinit(void);
 
 esp_err_t audio_actor_play_tone(uint32_t freq_hz, uint32_t duration_ms, TickType_t timeout_ticks);
+esp_err_t audio_actor_tone_on(uint32_t freq_hz, TickType_t timeout_ticks);
+esp_err_t audio_actor_tone_off(TickType_t timeout_ticks);
 esp_err_t audio_actor_play_file(const char *path, TickType_t timeout_ticks);
 esp_err_t audio_actor_stop(TickType_t timeout_ticks);
 

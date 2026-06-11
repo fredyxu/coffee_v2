@@ -2,6 +2,7 @@
 
 #include "modules/ui/page/page_settings/sections/page_settings_section_audio.h"
 #include "modules/ui/page/page_settings/sections/page_settings_section_display.h"
+#include "modules/ui/page/page_settings/sections/page_settings_section_key.h"
 #include "modules/ui/page/page_settings/sections/page_settings_section_wifi.h"
 #include "modules/ui/page/page_settings/sections/page_settings_section_ws.h"
 
@@ -67,6 +68,9 @@ const settings_sub_item_t *page_settings_get_sub_items(settings_item_id_t id, si
 
     case SETTINGS_ITEM_ID_AUDIO:
         return page_settings_section_audio_get_sub_items(count);
+
+    case SETTINGS_ITEM_ID_KEY:
+        return page_settings_section_key_get_sub_items(count);
 
     case SETTINGS_ITEM_ID_DISPLAY:
         return page_settings_section_display_get_sub_items(count);

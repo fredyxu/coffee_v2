@@ -7,6 +7,8 @@
 #include "modules/input/touch/touch.h"
 #include "modules/input/encoder/encoder_actor.h"
 #include "modules/audio/audio_actor.h"
+#include "modules/key/cw_keyer_actor.h"
+#include "modules/key/key_actor.h"
 #include "modules/mic/mic_actor.h"
 #include "modules/wifi/wifi_actor.h"
 #include "modules/ws/ws_actor.h"
@@ -99,6 +101,22 @@ esp_err_t app_startup(void) {
 		return err;
 	}
 	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "音频初始化完成.", 0);
+
+	// 初始化自动键时序 Actor
+	err = cw_keyer_actor_init();
+	if(err != ESP_OK) {
+		LOG("APP_INIT: cw keyer actor init failed");
+		return err;
+	}
+	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "自动键初始化完成.", 0);
+
+	// 初始化电键 Actor
+	err = key_actor_init();
+	if(err != ESP_OK) {
+		LOG("APP_INIT: key actor init failed");
+		return err;
+	}
+	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "电键初始化完成.", 0);
 	// 初始化麦克风
 	err = mic_actor_init();
 	if(err != ESP_OK) {

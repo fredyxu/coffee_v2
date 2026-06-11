@@ -26,6 +26,16 @@ typedef enum {
     APP_SETTING_ID_WS_ROOM,
     APP_SETTING_ID_WS_CALLSIGN,
     APP_SETTING_ID_WS_AUTO_RECONNECT,
+    APP_SETTING_ID_KEY_ENABLE,
+    APP_SETTING_ID_KEY_MODE,
+    APP_SETTING_ID_KEY_ACTIVE_LEVEL,
+    APP_SETTING_ID_KEY_SWAP_AB,
+    APP_SETTING_ID_KEY_DEBOUNCE_MS,
+    APP_SETTING_ID_KEY_MANUAL_DI_MS,
+    APP_SETTING_ID_KEY_MANUAL_ADAPTIVE_ENABLE,
+    APP_SETTING_ID_KEY_AUTO_DI_MS,
+    APP_SETTING_ID_KEY_AUTO_DA_RATIO,
+    APP_SETTING_ID_KEY_TONE_HZ,
     APP_SETTING_ID_AUDIO_VOLUME,
     APP_SETTING_ID_DISPLAY_BRIGHTNESS,
     APP_SETTING_ID_MAX,
@@ -53,6 +63,16 @@ typedef struct {
     char ws_room[33];
     char ws_callsign[17];
     bool ws_auto_reconnect;
+    bool key_enable;
+    int32_t key_mode;
+    int32_t key_active_level;
+    bool key_swap_ab;
+    int32_t key_debounce_ms;
+    int32_t key_manual_di_ms;
+    bool key_manual_adaptive_enable;
+    int32_t key_auto_di_ms;
+    char key_auto_da_ratio[8];
+    int32_t key_tone_hz;
     int32_t audio_volume;
     int32_t display_brightness;
 } app_settings_t;

@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "config/config_sys.h"
+#include "config/config_sys_key.h"
 #include "core/store/store_kv.h"
 #include "core/utils/log.h"
 
@@ -20,6 +21,7 @@
 
 #define APP_SETTINGS_NS_WIFI "wifi"
 #define APP_SETTINGS_NS_WS "ws"
+#define APP_SETTINGS_NS_KEY "key"
 #define APP_SETTINGS_NS_AUDIO "audio"
 #define APP_SETTINGS_NS_DISPLAY "display"
 
@@ -143,6 +145,118 @@ static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
         .target_size = sizeof(app_settings.ws_auto_reconnect),
         .dirty_bit = (1u << APP_SETTING_ID_WS_AUTO_RECONNECT),
 		.default_value.b = WS_DEFAULT_AUTO_RECONNECT != 0,
+    },
+    [APP_SETTING_ID_KEY_ENABLE] = {
+        .id = APP_SETTING_ID_KEY_ENABLE,
+        .type = STORE_KV_BOOL,
+        .namespace_name = APP_SETTINGS_NS_KEY,
+        .key = "enable",
+        .target = &app_settings.key_enable,
+        .target_size = sizeof(app_settings.key_enable),
+        .dirty_bit = (1u << APP_SETTING_ID_KEY_ENABLE),
+		.default_value.b = KEY_DEFAULT_ENABLE != 0,
+    },
+    [APP_SETTING_ID_KEY_MODE] = {
+        .id = APP_SETTING_ID_KEY_MODE,
+        .type = STORE_KV_I32,
+        .namespace_name = APP_SETTINGS_NS_KEY,
+        .key = "mode",
+        .target = &app_settings.key_mode,
+        .target_size = sizeof(app_settings.key_mode),
+        .min_i32 = KEY_MODE_MANUAL,
+        .max_i32 = KEY_MODE_AUTO,
+        .dirty_bit = (1u << APP_SETTING_ID_KEY_MODE),
+		.default_value.i32 = KEY_DEFAULT_MODE,
+    },
+    [APP_SETTING_ID_KEY_ACTIVE_LEVEL] = {
+        .id = APP_SETTING_ID_KEY_ACTIVE_LEVEL,
+        .type = STORE_KV_I32,
+        .namespace_name = APP_SETTINGS_NS_KEY,
+        .key = "active_level",
+        .target = &app_settings.key_active_level,
+        .target_size = sizeof(app_settings.key_active_level),
+        .min_i32 = 0,
+        .max_i32 = 1,
+        .dirty_bit = (1u << APP_SETTING_ID_KEY_ACTIVE_LEVEL),
+		.default_value.i32 = KEY_DEFAULT_ACTIVE_LEVEL,
+    },
+    [APP_SETTING_ID_KEY_SWAP_AB] = {
+        .id = APP_SETTING_ID_KEY_SWAP_AB,
+        .type = STORE_KV_BOOL,
+        .namespace_name = APP_SETTINGS_NS_KEY,
+        .key = "swap_ab",
+        .target = &app_settings.key_swap_ab,
+        .target_size = sizeof(app_settings.key_swap_ab),
+        .dirty_bit = (1u << APP_SETTING_ID_KEY_SWAP_AB),
+		.default_value.b = KEY_DEFAULT_SWAP_AB != 0,
+    },
+    [APP_SETTING_ID_KEY_DEBOUNCE_MS] = {
+        .id = APP_SETTING_ID_KEY_DEBOUNCE_MS,
+        .type = STORE_KV_I32,
+        .namespace_name = APP_SETTINGS_NS_KEY,
+        .key = "debounce_ms",
+        .target = &app_settings.key_debounce_ms,
+        .target_size = sizeof(app_settings.key_debounce_ms),
+        .min_i32 = 0,
+        .max_i32 = INT32_MAX,
+        .dirty_bit = (1u << APP_SETTING_ID_KEY_DEBOUNCE_MS),
+		.default_value.i32 = KEY_DEFAULT_DEBOUNCE_MS,
+    },
+    [APP_SETTING_ID_KEY_MANUAL_DI_MS] = {
+        .id = APP_SETTING_ID_KEY_MANUAL_DI_MS,
+        .type = STORE_KV_I32,
+        .namespace_name = APP_SETTINGS_NS_KEY,
+        .key = "manual_di_ms",
+        .target = &app_settings.key_manual_di_ms,
+        .target_size = sizeof(app_settings.key_manual_di_ms),
+        .min_i32 = 1,
+        .max_i32 = INT32_MAX,
+        .dirty_bit = (1u << APP_SETTING_ID_KEY_MANUAL_DI_MS),
+		.default_value.i32 = KEY_DEFAULT_MANUAL_DI_MS,
+    },
+    [APP_SETTING_ID_KEY_MANUAL_ADAPTIVE_ENABLE] = {
+        .id = APP_SETTING_ID_KEY_MANUAL_ADAPTIVE_ENABLE,
+        .type = STORE_KV_BOOL,
+        .namespace_name = APP_SETTINGS_NS_KEY,
+        .key = "manual_adaptive",
+        .target = &app_settings.key_manual_adaptive_enable,
+        .target_size = sizeof(app_settings.key_manual_adaptive_enable),
+        .dirty_bit = (1u << APP_SETTING_ID_KEY_MANUAL_ADAPTIVE_ENABLE),
+		.default_value.b = KEY_DEFAULT_MANUAL_ADAPTIVE_ENABLE != 0,
+    },
+    [APP_SETTING_ID_KEY_AUTO_DI_MS] = {
+        .id = APP_SETTING_ID_KEY_AUTO_DI_MS,
+        .type = STORE_KV_I32,
+        .namespace_name = APP_SETTINGS_NS_KEY,
+        .key = "auto_di_ms",
+        .target = &app_settings.key_auto_di_ms,
+        .target_size = sizeof(app_settings.key_auto_di_ms),
+        .min_i32 = 0,
+        .max_i32 = INT32_MAX,
+        .dirty_bit = (1u << APP_SETTING_ID_KEY_AUTO_DI_MS),
+		.default_value.i32 = KEY_DEFAULT_AUTO_DI_MS,
+    },
+    [APP_SETTING_ID_KEY_AUTO_DA_RATIO] = {
+        .id = APP_SETTING_ID_KEY_AUTO_DA_RATIO,
+        .type = STORE_KV_STR,
+        .namespace_name = APP_SETTINGS_NS_KEY,
+        .key = "auto_da_ratio",
+        .target = app_settings.key_auto_da_ratio,
+        .target_size = sizeof(app_settings.key_auto_da_ratio),
+        .dirty_bit = (1u << APP_SETTING_ID_KEY_AUTO_DA_RATIO),
+		.default_value.str = KEY_DEFAULT_AUTO_DA_RATIO,
+    },
+    [APP_SETTING_ID_KEY_TONE_HZ] = {
+        .id = APP_SETTING_ID_KEY_TONE_HZ,
+        .type = STORE_KV_I32,
+        .namespace_name = APP_SETTINGS_NS_KEY,
+        .key = "tone_hz",
+        .target = &app_settings.key_tone_hz,
+        .target_size = sizeof(app_settings.key_tone_hz),
+        .min_i32 = 1,
+        .max_i32 = INT32_MAX,
+        .dirty_bit = (1u << APP_SETTING_ID_KEY_TONE_HZ),
+		.default_value.i32 = KEY_DEFAULT_TONE_HZ,
     },
     [APP_SETTING_ID_AUDIO_VOLUME] = {
         .id = APP_SETTING_ID_AUDIO_VOLUME,
@@ -324,6 +438,26 @@ static void *app_settings_snapshot_target(const app_settings_t *snapshot, app_se
             return (void *)snapshot->ws_callsign;
         case APP_SETTING_ID_WS_AUTO_RECONNECT:
             return (void *)&snapshot->ws_auto_reconnect;
+        case APP_SETTING_ID_KEY_ENABLE:
+            return (void *)&snapshot->key_enable;
+        case APP_SETTING_ID_KEY_MODE:
+            return (void *)&snapshot->key_mode;
+        case APP_SETTING_ID_KEY_ACTIVE_LEVEL:
+            return (void *)&snapshot->key_active_level;
+        case APP_SETTING_ID_KEY_SWAP_AB:
+            return (void *)&snapshot->key_swap_ab;
+        case APP_SETTING_ID_KEY_DEBOUNCE_MS:
+            return (void *)&snapshot->key_debounce_ms;
+        case APP_SETTING_ID_KEY_MANUAL_DI_MS:
+            return (void *)&snapshot->key_manual_di_ms;
+        case APP_SETTING_ID_KEY_MANUAL_ADAPTIVE_ENABLE:
+            return (void *)&snapshot->key_manual_adaptive_enable;
+        case APP_SETTING_ID_KEY_AUTO_DI_MS:
+            return (void *)&snapshot->key_auto_di_ms;
+        case APP_SETTING_ID_KEY_AUTO_DA_RATIO:
+            return (void *)snapshot->key_auto_da_ratio;
+        case APP_SETTING_ID_KEY_TONE_HZ:
+            return (void *)&snapshot->key_tone_hz;
         case APP_SETTING_ID_AUDIO_VOLUME:
             return (void *)&snapshot->audio_volume;
         case APP_SETTING_ID_DISPLAY_BRIGHTNESS:

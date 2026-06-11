@@ -149,7 +149,27 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
 
         case MSG_EVT_INPUT_KEY_DI:
         case MSG_EVT_INPUT_KEY_DA:
+        case MSG_EVT_INPUT_KEY_A_DOWN:
+        case MSG_EVT_INPUT_KEY_A_UP:
+        case MSG_EVT_INPUT_KEY_B_DOWN:
+        case MSG_EVT_INPUT_KEY_B_UP:
+        case MSG_EVT_INPUT_KEY_CODE_CHANGED:
             *out_topic = MSG_TOPIC_KEY_INPUT;
+            return ESP_OK;
+
+        case MSG_EVT_CMD_AUDIO_TONE:
+        case MSG_EVT_CMD_AUDIO_TONE_ON:
+        case MSG_EVT_CMD_AUDIO_TONE_OFF:
+        case MSG_EVT_CMD_AUDIO_STOP:
+        case MSG_EVT_CMD_AUDIO_VOLUME_STEP:
+            *out_topic = MSG_TOPIC_AUDIO_CMD;
+            return ESP_OK;
+
+        case MSG_EVT_CMD_CW_KEYER_DI_START:
+        case MSG_EVT_CMD_CW_KEYER_DI_STOP:
+        case MSG_EVT_CMD_CW_KEYER_DA_START:
+        case MSG_EVT_CMD_CW_KEYER_DA_STOP:
+            *out_topic = MSG_TOPIC_CW_KEYER_CMD;
             return ESP_OK;
 
         case MSG_EVT_CMD_WIFI_START:
