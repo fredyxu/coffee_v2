@@ -5,7 +5,7 @@
  * ============================================================ */
 
 #define WS_DEFAULT_ENABLE 1
-#define WS_DEFAULT_URL "wss://coffee.zclub.cool/ws"
+#define WS_DEFAULT_URL "wss://coffee.veloria.asia/ws"
 #define WS_DEFAULT_ROOM "default"
 #define WS_DEFAULT_CALLSIGN ""
 #define WS_DEFAULT_AUTO_RECONNECT 1

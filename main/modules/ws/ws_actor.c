@@ -71,7 +71,7 @@ static void ws_actor_set_state(ws_actor_state_t state)
 		return;
 	}
 
-	LOG("ws state: %s -> %s", ws_actor_state_name(s_actor.state), ws_actor_state_name(state));
+	// LOG("ws state: %s -> %s", ws_actor_state_name(s_actor.state), ws_actor_state_name(state));
 	s_actor.state = state;
 }
 

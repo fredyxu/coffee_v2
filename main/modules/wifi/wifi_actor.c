@@ -232,7 +232,7 @@ static void wifi_actor_try_auto_connect_from_scan(void)
 		return;
 	}
 
-	LOG("wifi auto connect profile: %s", profile.ssid);
+	// LOG("wifi auto connect profile: %s", profile.ssid);
 	(void)wifi_actor_connect_profile(&profile);
 }
 
@@ -359,13 +359,13 @@ static esp_err_t wifi_actor_start_auto_flow(void)
 	}
 
 	size_t profile_count = wifi_profile_count();
-	LOG("wifi auto flow: enable=%d profile_count=%u saved_ssid=%s",
-	    app_settings.wifi_enable ? 1 : 0,
-	    (unsigned)profile_count,
-	    app_settings.wifi_ssid[0] != '\0' ? app_settings.wifi_ssid : "(empty)");
+	// LOG("wifi auto flow: enable=%d profile_count=%u saved_ssid=%s",
+	    // app_settings.wifi_enable ? 1 : 0,
+	    // (unsigned)profile_count,
+	    // app_settings.wifi_ssid[0] != '\0' ? app_settings.wifi_ssid : "(empty)");
 
 	if(profile_count > 0) {
-		LOG("wifi auto flow: scan saved profiles");
+		// LOG("wifi auto flow: scan saved profiles");
 		return wifi_actor_scan_networks();
 	}
 
