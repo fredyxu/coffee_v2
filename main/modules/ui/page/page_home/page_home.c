@@ -10,6 +10,8 @@
 #include "modules/ui/ui.h"
 #include "config/config_ui.h"
 #include "modules/ui/style/ui_style.h"
+#include "core/msg/msg.h"
+#include "modules/ui/ui_actor.h"
 
 #define HOME_PAGE_BOTTOM_BODY_HEIGHT 30
 #define HOME_PAGE_MARGIN 5
@@ -20,6 +22,26 @@ static lv_obj_t *msg_body;
 static lv_obj_t *context_body;
 static lv_obj_t *context_input_body;
 static lv_obj_t *btn_send;
+
+
+// 事件处理
+static void page_home_input_handler(const msg_t *msg)
+{
+    if(msg == NULL || msg->type != MSG_TYPE_INPUT) {
+        return;
+    }
+
+	// 长按编码器进入设置页面
+    if(msg->event == MSG_EVT_INPUT_ENCODER_LONG_PRESS) {
+        ui_nav_go((ui_page_nav_param_t) {
+            .page_id = PAGE_SETTINGS,
+        });
+    }
+}
+
+static const ui_page_ops_t page_home_ops = {
+    .on_input = page_home_input_handler,
+};
 
 
 esp_err_t page_home_show(lv_obj_t *p) {
@@ -93,6 +115,9 @@ esp_err_t page_home_show(lv_obj_t *p) {
 	// lv_obj_set_style_text_color(btn_send, UI_COLOR_TEXT, 0);
 	// lv_arclabel_set_text_vertical_align(btn_send, LV_TEXT_ALIGN_CENTER);
 	// lv_arclabel_set_text_horizontal_align(btn_send, LV_TEXT_ALIGN_CENTER);
+
+
+	ui_actor_set_ops(&page_home_ops);
 
 	return ESP_OK;
 }

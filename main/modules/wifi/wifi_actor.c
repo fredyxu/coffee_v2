@@ -17,6 +17,7 @@
 #include "modules/wifi/wifi_profile.h"
 #include "modules/wifi/wifi_scan_cache.h"
 #include "modules/wifi/wifi_settings.h"
+#include "modules/ws/ws_actor.h"
 
 #define WIFI_ACTOR_INBOX_Q_LEN 8
 #define WIFI_ACTOR_CONNECT_TIMEOUT_TICKS pdMS_TO_TICKS(15000)
@@ -381,6 +382,10 @@ static esp_err_t wifi_actor_start_auto_flow(void)
 
 static esp_err_t wifi_actor_set_enable(bool enable)
 {
+    if(app_settings.wifi_enable == enable) {
+        return ESP_OK;
+    }
+
     esp_err_t err = wifi_actor_update_enable_setting(enable);
     if(err != ESP_OK) {
         return err;
@@ -393,6 +398,7 @@ static esp_err_t wifi_actor_set_enable(bool enable)
 	    s_actor.connect_after_disconnect = false;
 	    s_actor.connect_deadline = 0;
 	    wifi_actor_clear_pending_credentials();
+	    (void)ws_actor_prepare_wifi_stop(pdMS_TO_TICKS(8000));
 	    (void)wifi_actor_request_disconnect(false);
 	    err = wifi_module_stop();
 	    s_actor.conn_state = WIFI_ACTOR_CONN_IDLE;

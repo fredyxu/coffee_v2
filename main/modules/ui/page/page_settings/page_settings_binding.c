@@ -15,6 +15,15 @@ static int binding_read_int(const settings_sub_item_t *item)
 	return (int)*(int32_t *)item->value;
 }
 
+static bool binding_read_bool(const settings_sub_item_t *item)
+{
+	if(item == NULL || item->value == NULL) {
+		return false;
+	}
+
+	return *(bool *)item->value;
+}
+
 static esp_err_t binding_write_bool(const settings_sub_item_t *item, bool value)
 {
 	if(item == NULL || item->value == NULL) {
@@ -87,7 +96,8 @@ static void binding_toggle_bool(page_settings_item_focus_item_t *focus)
 		return;
 	}
 
-	const bool new_value = !focus->value_bool;
+	const bool current_value = binding_read_bool(focus->item);
+	const bool new_value = !current_value;
 	esp_err_t err = binding_write_bool(focus->item, new_value);
 	if(err != ESP_OK) {
 		LOG("settings bool update failed: id=%d err=%d", focus->item->id, err);

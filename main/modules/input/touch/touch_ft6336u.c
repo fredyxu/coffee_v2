@@ -48,6 +48,10 @@ extern const int g_touch_pin_rst;
 #define FT_REG_ID_G_FIRMID          0xA6
 #define FT_REG_ID_G_CIPHER          0xA8
 
+#define FT_TOUCH_EVT_DOWN           0x00
+#define FT_TOUCH_EVT_UP             0x01
+#define FT_TOUCH_EVT_CONTACT        0x02
+
 typedef struct {
     bool swap_xy;
     bool mirror_x;
@@ -227,6 +231,11 @@ bool touch_ft6336u_read_point(touch_ft6336u_point_t *point)
     uint8_t p1[4] = {0};
     if(ft_read_regs(FT_REG_P1_XH, p1, sizeof(p1)) != ESP_OK) {
         return false;
+    }
+
+    uint8_t event = (p1[0] >> 6) & 0x03;
+    if(event != FT_TOUCH_EVT_DOWN && event != FT_TOUCH_EVT_CONTACT) {
+        return true;
     }
 
     int16_t x = (int16_t)(((p1[0] & 0x0F) << 8) | p1[1]);

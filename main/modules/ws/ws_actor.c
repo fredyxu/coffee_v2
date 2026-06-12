@@ -39,31 +39,16 @@ typedef struct {
 	uint32_t reconnect_delay_ms;
 	TickType_t next_reconnect_tick;
 	char active_url[WS_FINAL_URL_MAX];
+	TaskHandle_t wifi_stop_waiter;
+	esp_err_t wifi_stop_result;
 } ws_actor_ctx_t;
 
 static ws_actor_ctx_t s_actor = {
 	.sub_handle = MSG_SUB_HANDLE_INVALID,
 };
+static portMUX_TYPE s_wifi_stop_wait_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static void ws_actor_client_event_cb(const ws_client_event_t *event, void *user_ctx);
-
-static const char *ws_actor_state_name(ws_actor_state_t state)
-{
-	switch(state) {
-		case WS_ACTOR_STATE_IDLE:
-			return "idle";
-		case WS_ACTOR_STATE_WAIT_WIFI:
-			return "wait_wifi";
-		case WS_ACTOR_STATE_CONNECTING:
-			return "connecting";
-		case WS_ACTOR_STATE_CONNECTED:
-			return "connected";
-		case WS_ACTOR_STATE_BACKOFF:
-			return "backoff";
-		default:
-			return "unknown";
-	}
-}
 
 static void ws_actor_set_state(ws_actor_state_t state)
 {
@@ -287,6 +272,22 @@ static void ws_actor_apply_msg(const msg_t *msg)
 			(void)ws_actor_connect();
 			break;
 
+		case MSG_EVT_SYS_WIFI_STOPPING:
+			s_actor.wifi_connected = false;
+			s_actor.reconnect_delay_ms = 0;
+			esp_err_t deinit_err = ws_client_deinit();
+			s_actor.active_url[0] = '\0';
+			ws_actor_set_state(WS_ACTOR_STATE_WAIT_WIFI);
+			TaskHandle_t waiter = NULL;
+			portENTER_CRITICAL(&s_wifi_stop_wait_mux);
+			s_actor.wifi_stop_result = deinit_err;
+			waiter = s_actor.wifi_stop_waiter;
+			portEXIT_CRITICAL(&s_wifi_stop_wait_mux);
+			if(waiter != NULL) {
+				xTaskNotifyGive(waiter);
+			}
+			break;
+
 		case MSG_EVT_SYS_WIFI_DISCONNECTED:
 			s_actor.wifi_connected = false;
 			(void)ws_client_stop();
@@ -397,6 +398,53 @@ esp_err_t ws_actor_init(void)
 	}
 
 	return ESP_OK;
+}
+
+esp_err_t ws_actor_prepare_wifi_stop(TickType_t timeout_ticks)
+{
+	if(!s_actor.initialized || s_actor.queue == NULL) {
+		return ESP_OK;
+	}
+
+	TaskHandle_t current_task = xTaskGetCurrentTaskHandle();
+	if(current_task == NULL) {
+		return ESP_ERR_INVALID_STATE;
+	}
+
+	portENTER_CRITICAL(&s_wifi_stop_wait_mux);
+	if(s_actor.wifi_stop_waiter != NULL) {
+		portEXIT_CRITICAL(&s_wifi_stop_wait_mux);
+		return ESP_ERR_INVALID_STATE;
+	}
+	s_actor.wifi_stop_waiter = current_task;
+	s_actor.wifi_stop_result = ESP_ERR_TIMEOUT;
+	portEXIT_CRITICAL(&s_wifi_stop_wait_mux);
+
+	esp_err_t err = msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_STOPPING, 0, 0);
+	if(err != ESP_OK) {
+		portENTER_CRITICAL(&s_wifi_stop_wait_mux);
+		s_actor.wifi_stop_waiter = NULL;
+		portEXIT_CRITICAL(&s_wifi_stop_wait_mux);
+		return err;
+	}
+
+	if(ulTaskNotifyTake(pdTRUE, timeout_ticks) == 0) {
+		portENTER_CRITICAL(&s_wifi_stop_wait_mux);
+		if(s_actor.wifi_stop_waiter == current_task) {
+			s_actor.wifi_stop_waiter = NULL;
+		}
+		portEXIT_CRITICAL(&s_wifi_stop_wait_mux);
+		return ESP_ERR_TIMEOUT;
+	}
+
+	portENTER_CRITICAL(&s_wifi_stop_wait_mux);
+	err = s_actor.wifi_stop_result;
+	if(s_actor.wifi_stop_waiter == current_task) {
+		s_actor.wifi_stop_waiter = NULL;
+	}
+	portEXIT_CRITICAL(&s_wifi_stop_wait_mux);
+
+	return err;
 }
 
 esp_err_t ws_actor_deinit(void)

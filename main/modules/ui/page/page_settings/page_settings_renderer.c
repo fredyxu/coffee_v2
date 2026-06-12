@@ -155,6 +155,7 @@ void page_settings_renderer_insert_bool(lv_obj_t *parent, const settings_sub_ite
 	lv_obj_t *obj_title_label = lv_label_create(obj_title_body);
 	lv_label_set_text(obj_title_label, item->title);
 	lv_obj_t *obj_switch = lv_switch_create(obj_body);
+	lv_obj_clear_flag(obj_switch, LV_OBJ_FLAG_CLICKABLE);
 
 	if(item->value != NULL && *(bool *)item->value) {
 		lv_obj_add_state(obj_switch, LV_STATE_CHECKED);

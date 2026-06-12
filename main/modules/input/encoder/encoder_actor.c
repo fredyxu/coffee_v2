@@ -137,7 +137,7 @@ static void encoder_process_sw_long_press(void)
     }
 
     s_ctx.sw_long_sent = true;
-    // encoder_post_input_event(MSG_EVT_INPUT_ENCODER_LONG_PRESS);
+    encoder_post_input_event(MSG_EVT_INPUT_ENCODER_LONG_PRESS);
 }
 
 static void encoder_actor_task(void *arg)

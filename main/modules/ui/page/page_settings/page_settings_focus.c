@@ -65,6 +65,10 @@ static void focus_touch_event_cb(lv_event_t *e)
 	page_settings_item_focus_item_t *focus = page_settings_focus_current();
 	if(focus != NULL && s_activate_cb != NULL) {
 		s_activate_cb(focus, s_activate_user_data);
+		lv_indev_t *indev = lv_indev_active();
+		if(indev != NULL) {
+			lv_indev_wait_release(indev);
+		}
 	}
 }
 

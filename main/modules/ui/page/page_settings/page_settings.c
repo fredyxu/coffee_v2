@@ -18,7 +18,8 @@
 #include "modules/ui/ui.h"
 
 
-#define SETTINGS_PAGE_WIDTH DISPLAY_H_RES - CONFIG_UI_MARGIN * 2
+// #define SETTINGS_PAGE_WIDTH (DISPLAY_H_RES - CONFIG_UI_MARGIN * 2)
+#define SETTINGS_PAGE_WIDTH DISPLAY_H_RES
 #define SETTINGS_PAGE_BG_COLOR UI_COLOR_PANEL_2
 #define SETTINGS_MARGIN 10
 #define SETTINGS_ITEM_HEIGHT 15
@@ -105,9 +106,12 @@ static void create_page() {
 	lv_obj_set_style_border_width(settings_body, 0, 0);
 	
 	lv_obj_set_style_radius(settings_body, CONFIG_UI_RADIUS, 0);
-	lv_obj_set_style_size(settings_body, 
+	lv_obj_set_style_size(
+		settings_body, 
 		SETTINGS_PAGE_WIDTH, 
-		DISPLAY_V_RES - CONFIG_UI_TOP_STATUS_HEIGHT - CONFIG_UI_MARGIN * 3, 0);
+		DISPLAY_V_RES - CONFIG_UI_TOP_STATUS_HEIGHT,
+		// DISPLAY_V_RES - CONFIG_UI_TOP_STATUS_HEIGHT - CONFIG_UI_MARGIN * 3, 
+	LV_STATE_DEFAULT);
 	lv_obj_set_style_bg_color(settings_body, SETTINGS_PAGE_BG_COLOR, 0);
 	lv_obj_set_style_pad_row(settings_body, CONFIG_UI_MARGIN, 0);
 	lv_obj_set_style_margin_all(settings_body, 0, 0);
@@ -120,7 +124,6 @@ static void create_page() {
 		LV_FLEX_ALIGN_CENTER,
 		LV_FLEX_ALIGN_CENTER
 	);
-
 	
 	insert_settings_items();
 }
@@ -130,6 +133,7 @@ void style_init(void) {
 		return;
 	}
 
+	// 页面
 	lv_style_init(&style_item_body);
 	lv_style_set_size(&style_item_body, SETTINGS_PAGE_WIDTH, SETTINGS_ITEM_HEIGHT * 2 + 25);
 	lv_style_set_radius(&style_item_body, 0);

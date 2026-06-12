@@ -94,7 +94,7 @@ static void ui_create(void *arg)
 	ui_screen_init();
 	// page_show(PAGE_SETTINGS_ITEM);
 	ui_nav_go((ui_page_nav_param_t) {
-		.page_id = PAGE_SETTINGS,
+		.page_id = PAGE_HOME,
 	});
 	// page_settings_item_show(screen, 0);
 }
