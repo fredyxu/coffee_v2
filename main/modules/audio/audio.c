@@ -12,6 +12,7 @@
 #include "core/utils/log.h"
 
 #define AUDIO_TONE_BUF_SAMPLES 256
+#define AUDIO_STEREO_TMP_FRAMES 128
 #define AUDIO_PI 3.14159265358979323846f
 
 typedef struct {
@@ -92,7 +93,7 @@ esp_err_t audio_init(const audio_config_t *cfg)
 
     i2s_std_config_t std_cfg = {
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(cfg->sample_rate),
-        .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
         .gpio_cfg = {
             .mclk = I2S_GPIO_UNUSED,
             .bclk = cfg->bclk_io,
@@ -107,7 +108,7 @@ esp_err_t audio_init(const audio_config_t *cfg)
         },
     };
 
-    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
+    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
 
     err = i2s_channel_init_std_mode(s_audio.tx_chan, &std_cfg);
     if(err != ESP_OK) {
@@ -209,14 +210,47 @@ static esp_err_t audio_write_samples(const int16_t *samples, size_t sample_count
         return ESP_ERR_INVALID_ARG;
     }
 
-    size_t written = 0;
-    size_t bytes = sample_count * sizeof(int16_t);
-    esp_err_t err = i2s_channel_write(s_audio.tx_chan, samples, bytes, &written, timeout_ticks);
-    if(err != ESP_OK) {
-        return err;
+    size_t offset = 0;
+    int16_t stereo[AUDIO_STEREO_TMP_FRAMES * 2];
+    while(offset < sample_count) {
+        size_t frames = sample_count - offset;
+        if(frames > AUDIO_STEREO_TMP_FRAMES) {
+            frames = AUDIO_STEREO_TMP_FRAMES;
+        }
+
+        for(size_t i = 0; i < frames; i++) {
+            int16_t sample = samples[offset + i];
+            stereo[i * 2] = sample;
+            stereo[i * 2 + 1] = sample;
+        }
+
+        size_t written = 0;
+        size_t bytes = frames * 2 * sizeof(int16_t);
+        esp_err_t err = i2s_channel_write(s_audio.tx_chan, stereo, bytes, &written, timeout_ticks);
+        if(err != ESP_OK) {
+            static uint32_t s_i2s_err_count;
+            s_i2s_err_count++;
+            if((s_i2s_err_count % 20U) == 1U) {
+                LOG("i2s write failed: err=%s written=%u/%u",
+                    esp_err_to_name(err),
+                    (unsigned)written,
+                    (unsigned)bytes);
+            }
+            return err;
+        }
+        if(written != bytes) {
+            static uint32_t s_i2s_partial_count;
+            s_i2s_partial_count++;
+            if((s_i2s_partial_count % 20U) == 1U) {
+                LOG("i2s write partial: written=%u/%u", (unsigned)written, (unsigned)bytes);
+            }
+            return ESP_ERR_TIMEOUT;
+        }
+
+        offset += frames;
     }
 
-    return (written == bytes) ? ESP_OK : ESP_ERR_TIMEOUT;
+    return ESP_OK;
 }
 
 esp_err_t audio_play_pcm16(const int16_t *samples, size_t sample_count, TickType_t timeout_ticks)
@@ -432,6 +466,9 @@ esp_err_t audio_stop(void)
         return err;
     }
 
+    int16_t silence[AUDIO_STEREO_TMP_FRAMES * 2] = {0};
+    size_t written = 0;
+    (void)i2s_channel_write(s_audio.tx_chan, silence, sizeof(silence), &written, pdMS_TO_TICKS(20));
     (void)i2s_channel_disable(s_audio.tx_chan);
     err = i2s_channel_enable(s_audio.tx_chan);
 

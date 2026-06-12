@@ -212,6 +212,9 @@ static void key_actor_handle_input_event(const key_input_event_t *event)
         return;
     }
 
+    // LOG("key input %c %s",
+    //     event->input == KEY_INPUT_A ? 'A' : 'B',
+    //     event->pressed ? "down" : "up");
     key_actor_publish_physical(event->input, event->pressed, event->timestamp_ms);
 
     if(!app_settings.key_enable) {

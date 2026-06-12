@@ -13,8 +13,12 @@
 #include "core/utils/log.h"
 #include "modules/audio/audio.h"
 
-#define AUDIO_ACTOR_TONE_CHUNK_MS 5
-#define AUDIO_ACTOR_TONE_MAX_SAMPLES 256
+#define AUDIO_ACTOR_TONE_CHUNK_MS 10
+#define AUDIO_ACTOR_TONE_MAX_SAMPLES 512
+#define AUDIO_ACTOR_TONE_TABLE_SIZE 256
+#define AUDIO_ACTOR_TONE_PHASE_BITS 32
+#define AUDIO_ACTOR_TONE_ATTACK_MS 8
+#define AUDIO_ACTOR_TONE_RELEASE_MS 8
 #define AUDIO_ACTOR_PI 3.14159265358979323846f
 
 typedef enum {
@@ -26,6 +30,13 @@ typedef enum {
     AUDIO_ACTOR_CMD_STREAM_START,
     AUDIO_ACTOR_CMD_STREAM_STOP,
 } audio_actor_cmd_type_t;
+
+typedef enum {
+    AUDIO_ACTOR_TONE_ENV_OFF = 0,
+    AUDIO_ACTOR_TONE_ENV_ATTACK,
+    AUDIO_ACTOR_TONE_ENV_SUSTAIN,
+    AUDIO_ACTOR_TONE_ENV_RELEASE,
+} audio_actor_tone_env_t;
 
 typedef struct {
     audio_actor_cmd_type_t type;
@@ -51,12 +62,52 @@ typedef struct {
     TaskHandle_t task;
     bool stream_mode;
     bool tone_mode;
+    audio_actor_tone_env_t tone_env;
     uint32_t tone_freq_hz;
-    float tone_phase;
+    uint32_t tone_phase;
+    uint32_t tone_env_sample;
     uint32_t stream_sample_rate;
 } audio_actor_ctx_t;
 
 static audio_actor_ctx_t s_actor = {0};
+static int16_t s_tone_table[AUDIO_ACTOR_TONE_TABLE_SIZE];
+static bool s_tone_table_ready;
+
+static void audio_actor_init_tone_table(void)
+{
+    if(s_tone_table_ready) {
+        return;
+    }
+
+    for(size_t i = 0; i < AUDIO_ACTOR_TONE_TABLE_SIZE; i++) {
+        float phase = (2.0f * AUDIO_ACTOR_PI * (float)i) / (float)AUDIO_ACTOR_TONE_TABLE_SIZE;
+        s_tone_table[i] = (int16_t)(sinf(phase) * 32767.0f);
+    }
+    s_tone_table_ready = true;
+}
+
+static void audio_actor_tone_start(uint32_t freq_hz)
+{
+    s_actor.tone_freq_hz = freq_hz;
+    s_actor.tone_phase = 0;
+    s_actor.tone_env = AUDIO_ACTOR_TONE_ENV_ATTACK;
+    s_actor.tone_env_sample = 0;
+    s_actor.tone_mode = true;
+}
+
+static void audio_actor_tone_release(void)
+{
+    if(s_actor.tone_mode && s_actor.tone_env != AUDIO_ACTOR_TONE_ENV_OFF) {
+        s_actor.tone_env = AUDIO_ACTOR_TONE_ENV_RELEASE;
+        s_actor.tone_env_sample = 0;
+        return;
+    }
+
+    s_actor.tone_mode = false;
+    s_actor.tone_env = AUDIO_ACTOR_TONE_ENV_OFF;
+    s_actor.tone_env_sample = 0;
+    (void)audio_stop();
+}
 
 static esp_err_t audio_actor_post_cmd(const audio_actor_cmd_t *cmd, TickType_t timeout_ticks)
 {
@@ -78,11 +129,19 @@ static void audio_actor_handle_msg(const msg_t *msg)
             (void)audio_actor_play_tone((uint32_t)msg->data.tone.freq, (uint32_t)msg->data.tone.duration, 0);
             break;
         case MSG_EVT_CMD_AUDIO_TONE_ON:
-            (void)audio_actor_tone_on((uint32_t)msg->data.tone.freq, 0);
+            if(msg->data.tone.freq > 0) {
+                // LOG("audio tone on: freq=%d src=%d", msg->data.tone.freq, msg->src);
+                audio_actor_tone_start((uint32_t)msg->data.tone.freq);
+            }
             break;
         case MSG_EVT_CMD_AUDIO_TONE_OFF:
         case MSG_EVT_CMD_AUDIO_STOP:
-            (void)audio_actor_stop(0);
+            // LOG("audio tone off: event=%d src=%d", msg->event, msg->src);
+            s_actor.stream_mode = false;
+            if(s_actor.stream_q) {
+                (void)xQueueReset(s_actor.stream_q);
+            }
+            audio_actor_tone_release();
             break;
         default:
             break;
@@ -103,9 +162,11 @@ static void audio_actor_drain_msg_queue(void)
 
 static void audio_actor_write_tone_chunk(void)
 {
-    if(!s_actor.tone_mode || s_actor.tone_freq_hz == 0 || !audio_is_ready()) {
+    if(!s_actor.tone_mode || s_actor.tone_env == AUDIO_ACTOR_TONE_ENV_OFF ||
+       s_actor.tone_freq_hz == 0 || !audio_is_ready()) {
         return;
     }
+    audio_actor_init_tone_table();
 
     uint32_t sample_rate = audio_get_sample_rate();
     if(sample_rate == 0) {
@@ -121,21 +182,57 @@ static void audio_actor_write_tone_chunk(void)
     }
 
     int16_t samples[AUDIO_ACTOR_TONE_MAX_SAMPLES];
-    float step = 2.0f * AUDIO_ACTOR_PI * (float)s_actor.tone_freq_hz / (float)sample_rate;
     float volume = ((float)audio_get_volume() / 100.0f) * 0.35f;
-
-    for(size_t i = 0; i < sample_count; i++) {
-        float s = sinf(s_actor.tone_phase) * 32767.0f * volume;
-        if(s > 32767.0f) s = 32767.0f;
-        if(s < -32768.0f) s = -32768.0f;
-        samples[i] = (int16_t)s;
-        s_actor.tone_phase += step;
-        if(s_actor.tone_phase >= 2.0f * AUDIO_ACTOR_PI) {
-            s_actor.tone_phase -= 2.0f * AUDIO_ACTOR_PI;
-        }
+    uint32_t phase_step = (uint32_t)(((uint64_t)s_actor.tone_freq_hz << AUDIO_ACTOR_TONE_PHASE_BITS) / sample_rate);
+    uint32_t attack_samples = (sample_rate * AUDIO_ACTOR_TONE_ATTACK_MS) / 1000U;
+    uint32_t release_samples = (sample_rate * AUDIO_ACTOR_TONE_RELEASE_MS) / 1000U;
+    if(attack_samples == 0) {
+        attack_samples = 1;
+    }
+    if(release_samples == 0) {
+        release_samples = 1;
     }
 
-    (void)audio_play_stream_chunk(samples, sample_count, pdMS_TO_TICKS(20));
+    for(size_t i = 0; i < sample_count; i++) {
+        float env = 1.0f;
+        if(s_actor.tone_env == AUDIO_ACTOR_TONE_ENV_ATTACK) {
+            env = (float)s_actor.tone_env_sample / (float)attack_samples;
+            s_actor.tone_env_sample++;
+            if(s_actor.tone_env_sample >= attack_samples) {
+                s_actor.tone_env = AUDIO_ACTOR_TONE_ENV_SUSTAIN;
+                s_actor.tone_env_sample = 0;
+                env = 1.0f;
+            }
+        } else if(s_actor.tone_env == AUDIO_ACTOR_TONE_ENV_RELEASE) {
+            if(s_actor.tone_env_sample >= release_samples) {
+                env = 0.0f;
+                s_actor.tone_env = AUDIO_ACTOR_TONE_ENV_OFF;
+                s_actor.tone_mode = false;
+            } else {
+                env = (float)(release_samples - s_actor.tone_env_sample) / (float)release_samples;
+                s_actor.tone_env_sample++;
+            }
+        }
+
+        uint8_t idx = (uint8_t)(s_actor.tone_phase >> 24);
+        samples[i] = (int16_t)((float)s_tone_table[idx] * volume * env);
+        s_actor.tone_phase += phase_step;
+    }
+
+    esp_err_t err = audio_play_stream_chunk(samples, sample_count, portMAX_DELAY);
+    if(err != ESP_OK) {
+        static uint32_t s_drop_count;
+        s_drop_count++;
+        if((s_drop_count % 100U) == 1U) {
+            LOG("audio tone chunk drop: err=%s count=%u", esp_err_to_name(err), (unsigned)s_drop_count);
+        }
+    }
+    if(!s_actor.tone_mode || s_actor.tone_env == AUDIO_ACTOR_TONE_ENV_OFF) {
+        s_actor.tone_env = AUDIO_ACTOR_TONE_ENV_OFF;
+        s_actor.tone_env_sample = 0;
+        (void)audio_stop();
+    }
+    vTaskDelay(pdMS_TO_TICKS(1));
 }
 
 static void audio_actor_task(void *arg)
@@ -149,21 +246,26 @@ static void audio_actor_task(void *arg)
         audio_actor_drain_msg_queue();
 
         if(s_actor.tone_mode && !s_actor.stream_mode) {
+            audio_actor_drain_msg_queue();
+            if(!s_actor.tone_mode || s_actor.stream_mode) {
+                continue;
+            }
             if(xQueueReceive(s_actor.cmd_q, &cmd, 0) == pdTRUE) {
                 switch(cmd.type) {
                     case AUDIO_ACTOR_CMD_TONE_OFF:
                     case AUDIO_ACTOR_CMD_STOP:
-                        (void)audio_stop();
-                        s_actor.tone_mode = false;
+                        audio_actor_tone_release();
                         break;
                     case AUDIO_ACTOR_CMD_TONE_ON:
-                        s_actor.tone_freq_hz = cmd.data.tone.freq_hz;
+                        audio_actor_tone_start(cmd.data.tone.freq_hz);
                         break;
                     default:
                         break;
                 }
             }
-            audio_actor_write_tone_chunk();
+            if(s_actor.tone_mode && !s_actor.stream_mode) {
+                audio_actor_write_tone_chunk();
+            }
             continue;
         }
 
@@ -191,20 +293,16 @@ static void audio_actor_task(void *arg)
                 (void)audio_play_tone(cmd.data.tone.freq_hz, cmd.data.tone.duration_ms);
                 break;
             case AUDIO_ACTOR_CMD_TONE_ON:
-                s_actor.tone_freq_hz = cmd.data.tone.freq_hz;
-                s_actor.tone_phase = 0.0f;
-                s_actor.tone_mode = true;
+                audio_actor_tone_start(cmd.data.tone.freq_hz);
                 break;
             case AUDIO_ACTOR_CMD_TONE_OFF:
-                (void)audio_stop();
-                s_actor.tone_mode = false;
+                audio_actor_tone_release();
                 break;
             case AUDIO_ACTOR_CMD_FILE:
                 (void)audio_play_file(cmd.data.file.path);
                 break;
             case AUDIO_ACTOR_CMD_STOP:
-                (void)audio_stop();
-                s_actor.tone_mode = false;
+                audio_actor_tone_release();
                 if(s_actor.stream_q) {
                     (void)xQueueReset(s_actor.stream_q);
                 }

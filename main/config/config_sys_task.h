@@ -5,12 +5,12 @@
  * ============================================================ */
 
 /* 优先级：值越大优先级越高 */
-#define TASK_PRIO_AUDIO 6
+#define TASK_PRIO_AUDIO 2
 #define TASK_PRIO_MIC 3
 #define TASK_PRIO_LVGL 5
 #define TASK_PRIO_CON 5
 #define TASK_PRIO_ENCODER 4
-#define TASK_PRIO_KEY 2
+#define TASK_PRIO_KEY 4
 
 /* 核绑定：0=CPU0, 1=CPU1 */
 /* 推荐：UI 单独在 Core1，音频/路由/输入在 Core0 */

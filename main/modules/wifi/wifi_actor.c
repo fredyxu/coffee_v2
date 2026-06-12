@@ -375,7 +375,7 @@ static esp_err_t wifi_actor_start_auto_flow(void)
 		return wifi_actor_request_connect();
 	}
 
-	LOG("wifi auto flow: no saved profile, scan only");
+	// LOG("wifi auto flow: no saved profile, scan only");
 	return wifi_actor_scan_networks();
 }
 

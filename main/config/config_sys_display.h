@@ -21,4 +21,3 @@
 #define CONFIG_LCD_INVERT_COLOR 1
 
 
-
