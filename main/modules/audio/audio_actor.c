@@ -68,7 +68,6 @@ typedef struct {
     uint32_t tone_phase;
     uint32_t tone_env_sample;
     uint32_t stream_sample_rate;
-    bool silence_running;
 } audio_actor_ctx_t;
 
 static audio_actor_ctx_t s_actor = {0};
@@ -95,7 +94,6 @@ static void audio_actor_tone_start(uint32_t freq_hz)
     s_actor.tone_env = AUDIO_ACTOR_TONE_ENV_ATTACK;
     s_actor.tone_env_sample = 0;
     s_actor.tone_mode = true;
-    s_actor.silence_running = false;
 }
 
 static void audio_actor_tone_release(void)
@@ -131,7 +129,6 @@ static void audio_actor_write_silence_chunk(void)
     }
 
     int16_t silence[AUDIO_ACTOR_TONE_MAX_SAMPLES] = {0};
-    s_actor.silence_running = true;
     (void)audio_play_stream_chunk(silence, sample_count, portMAX_DELAY);
     vTaskDelay(pdMS_TO_TICKS(1));
 }
@@ -246,14 +243,7 @@ static void audio_actor_write_tone_chunk(void)
         s_actor.tone_phase += phase_step;
     }
 
-    esp_err_t err = audio_play_stream_chunk(samples, sample_count, portMAX_DELAY);
-    if(err != ESP_OK) {
-        static uint32_t s_drop_count;
-        s_drop_count++;
-        if((s_drop_count % 100U) == 1U) {
-            LOG("audio tone chunk drop: err=%s count=%u", esp_err_to_name(err), (unsigned)s_drop_count);
-        }
-    }
+    (void)audio_play_stream_chunk(samples, sample_count, portMAX_DELAY);
     if(!s_actor.tone_mode || s_actor.tone_env == AUDIO_ACTOR_TONE_ENV_OFF) {
         s_actor.tone_env = AUDIO_ACTOR_TONE_ENV_OFF;
         s_actor.tone_env_sample = 0;
