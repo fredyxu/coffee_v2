@@ -228,22 +228,9 @@ static esp_err_t audio_write_samples(const int16_t *samples, size_t sample_count
         size_t bytes = frames * 2 * sizeof(int16_t);
         esp_err_t err = i2s_channel_write(s_audio.tx_chan, stereo, bytes, &written, timeout_ticks);
         if(err != ESP_OK) {
-            static uint32_t s_i2s_err_count;
-            s_i2s_err_count++;
-            if((s_i2s_err_count % 20U) == 1U) {
-                LOG("i2s write failed: err=%s written=%u/%u",
-                    esp_err_to_name(err),
-                    (unsigned)written,
-                    (unsigned)bytes);
-            }
             return err;
         }
         if(written != bytes) {
-            static uint32_t s_i2s_partial_count;
-            s_i2s_partial_count++;
-            if((s_i2s_partial_count % 20U) == 1U) {
-                LOG("i2s write partial: written=%u/%u", (unsigned)written, (unsigned)bytes);
-            }
             return ESP_ERR_TIMEOUT;
         }
 

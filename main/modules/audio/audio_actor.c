@@ -19,6 +19,7 @@
 #define AUDIO_ACTOR_TONE_PHASE_BITS 32
 #define AUDIO_ACTOR_TONE_ATTACK_MS 8
 #define AUDIO_ACTOR_TONE_RELEASE_MS 8
+#define AUDIO_ACTOR_IDLE_SILENCE_CHUNK_MS 10
 #define AUDIO_ACTOR_PI 3.14159265358979323846f
 
 typedef enum {
@@ -67,6 +68,7 @@ typedef struct {
     uint32_t tone_phase;
     uint32_t tone_env_sample;
     uint32_t stream_sample_rate;
+    bool silence_running;
 } audio_actor_ctx_t;
 
 static audio_actor_ctx_t s_actor = {0};
@@ -93,6 +95,7 @@ static void audio_actor_tone_start(uint32_t freq_hz)
     s_actor.tone_env = AUDIO_ACTOR_TONE_ENV_ATTACK;
     s_actor.tone_env_sample = 0;
     s_actor.tone_mode = true;
+    s_actor.silence_running = false;
 }
 
 static void audio_actor_tone_release(void)
@@ -106,7 +109,31 @@ static void audio_actor_tone_release(void)
     s_actor.tone_mode = false;
     s_actor.tone_env = AUDIO_ACTOR_TONE_ENV_OFF;
     s_actor.tone_env_sample = 0;
-    (void)audio_stop();
+}
+
+static void audio_actor_write_silence_chunk(void)
+{
+    if(s_actor.stream_mode || s_actor.tone_mode || !audio_is_ready()) {
+        return;
+    }
+
+    uint32_t sample_rate = audio_get_sample_rate();
+    if(sample_rate == 0) {
+        return;
+    }
+
+    size_t sample_count = (sample_rate * AUDIO_ACTOR_IDLE_SILENCE_CHUNK_MS) / 1000U;
+    if(sample_count == 0) {
+        sample_count = 1;
+    }
+    if(sample_count > AUDIO_ACTOR_TONE_MAX_SAMPLES) {
+        sample_count = AUDIO_ACTOR_TONE_MAX_SAMPLES;
+    }
+
+    int16_t silence[AUDIO_ACTOR_TONE_MAX_SAMPLES] = {0};
+    s_actor.silence_running = true;
+    (void)audio_play_stream_chunk(silence, sample_count, portMAX_DELAY);
+    vTaskDelay(pdMS_TO_TICKS(1));
 }
 
 static esp_err_t audio_actor_post_cmd(const audio_actor_cmd_t *cmd, TickType_t timeout_ticks)
@@ -230,7 +257,7 @@ static void audio_actor_write_tone_chunk(void)
     if(!s_actor.tone_mode || s_actor.tone_env == AUDIO_ACTOR_TONE_ENV_OFF) {
         s_actor.tone_env = AUDIO_ACTOR_TONE_ENV_OFF;
         s_actor.tone_env_sample = 0;
-        (void)audio_stop();
+        s_actor.tone_mode = false;
     }
     vTaskDelay(pdMS_TO_TICKS(1));
 }
@@ -284,6 +311,7 @@ static void audio_actor_task(void *arg)
             }
         } else {
             if(xQueueReceive(s_actor.cmd_q, &cmd, pdMS_TO_TICKS(20)) != pdTRUE) {
+                audio_actor_write_silence_chunk();
                 continue;
             }
         }
