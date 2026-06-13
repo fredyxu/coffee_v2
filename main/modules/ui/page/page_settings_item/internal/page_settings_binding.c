@@ -1,4 +1,4 @@
-#include "modules/ui/page/page_settings/page_settings_binding.h"
+#include "modules/ui/page/page_settings_item/internal/page_settings_binding.h"
 
 #include <stdint.h>
 

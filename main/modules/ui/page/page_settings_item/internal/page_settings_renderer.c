@@ -1,7 +1,7 @@
-#include "modules/ui/page/page_settings/page_settings_renderer.h"
+#include "modules/ui/page/page_settings_item/internal/page_settings_renderer.h"
 
-#include "modules/ui/page/page_settings/page_settings_focus.h"
-#include "modules/ui/page/page_settings/page_settings_item_style.h"
+#include "modules/ui/page/page_settings_item/internal/page_settings_focus.h"
+#include "modules/ui/page/page_settings_item/internal/page_settings_item_style.h"
 #include "modules/ui/style/ui_style.h"
 #include "modules/ui/theme/color.h"
 #include "modules/ui/theme/font.h"
@@ -32,6 +32,26 @@ static size_t *settings_list_count(const settings_sub_item_t *item)
 	return NULL;
 }
 
+static void renderer_make_display_only(lv_obj_t *obj)
+{
+	if(obj == NULL) {
+		return;
+	}
+
+	lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+	lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+	lv_obj_remove_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
+}
+
+static void renderer_disable_click_focus(lv_obj_t *obj)
+{
+	if(obj == NULL) {
+		return;
+	}
+
+	lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+}
+
 lv_obj_t *page_settings_renderer_create_list_container(lv_obj_t *parent)
 {
 	lv_obj_t *container = lv_obj_create(parent);
@@ -45,6 +65,7 @@ lv_obj_t *page_settings_renderer_create_list_container(lv_obj_t *parent)
 	lv_obj_set_style_pad_all(container, 0, 0);
 	lv_obj_set_style_pad_row(container, 0, 0);
 	lv_obj_remove_flag(container, LV_OBJ_FLAG_SCROLLABLE);
+	renderer_make_display_only(container);
 	return container;
 }
 
@@ -60,6 +81,7 @@ lv_obj_t *page_settings_renderer_insert_list_row(lv_obj_t *parent,
 	lv_obj_t *obj_body = lv_obj_create(parent);
 	lv_obj_t *obj_title_label = lv_label_create(obj_body);
 	lv_label_set_text(obj_title_label, title ? title : "");
+	renderer_make_display_only(obj_title_label);
 
 	page_settings_item_apply_style_page_item_list(
 		obj_body,
@@ -134,6 +156,9 @@ void page_settings_renderer_insert_text(lv_obj_t *parent, const settings_sub_ite
 	lv_obj_t *obj_value_label = lv_label_create(obj_title_body);
 	lv_label_set_text(obj_title_label, item->title ? item->title : "");
 	lv_label_set_text(obj_value_label, item->value != NULL ? (const char *)item->value : "");
+	renderer_make_display_only(obj_title_body);
+	renderer_make_display_only(obj_title_label);
+	renderer_make_display_only(obj_value_label);
 
 	page_settings_item_apply_style_page_item_text(obj_body);
 	lv_obj_set_style_text_font(obj_title_label, UI_FONT_12, 0);
@@ -156,6 +181,9 @@ void page_settings_renderer_insert_bool(lv_obj_t *parent, const settings_sub_ite
 	lv_label_set_text(obj_title_label, item->title);
 	lv_obj_t *obj_switch = lv_switch_create(obj_body);
 	lv_obj_clear_flag(obj_switch, LV_OBJ_FLAG_CLICKABLE);
+	renderer_disable_click_focus(obj_switch);
+	renderer_make_display_only(obj_title_body);
+	renderer_make_display_only(obj_title_label);
 
 	if(item->value != NULL && *(bool *)item->value) {
 		lv_obj_add_state(obj_switch, LV_STATE_CHECKED);
@@ -184,6 +212,11 @@ void page_settings_renderer_insert_int(lv_obj_t *parent,
 	lv_obj_t *obj_slider = lv_slider_create(obj_slider_body);
 	lv_slider_set_range(obj_slider, item->min_value, item->max_value);
 	lv_slider_set_value(obj_slider, *(int *)item->value, LV_ANIM_OFF);
+	renderer_make_display_only(obj_title_body);
+	renderer_make_display_only(obj_title_label);
+	renderer_make_display_only(obj_value_label);
+	renderer_make_display_only(obj_slider_body);
+	renderer_disable_click_focus(obj_slider);
 
 	lv_label_set_text(obj_title_label, item->title);
 	lv_label_set_text_fmt(obj_value_label, "%d", *(int *)item->value);

@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-#include "modules/ui/page/page_settings/page_settings_data.h"
+#include "modules/ui/page/page_settings_item/page_settings_item_data.h"
 
 #ifdef __cplusplus
 extern "C" {

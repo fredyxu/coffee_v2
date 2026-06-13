@@ -204,6 +204,11 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
             *out_topic = MSG_TOPIC_WEBSOCKET_EVENT;
             return ESP_OK;
 
+        case MSG_EVT_SYS_APP_INIT_INFO:
+        case MSG_EVT_SYS_APP_INIT_DONE:
+            *out_topic = MSG_TOPIC_APP_INIT_EVENT;
+            return ESP_OK;
+
         default:
             break;
     }

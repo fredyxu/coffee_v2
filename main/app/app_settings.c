@@ -614,7 +614,7 @@ esp_err_t app_settings_update(const app_settings_update_t *update)
         return ESP_ERR_INVALID_ARG;
     }
 
-	LOG("app_settings_update: id=%d", (int)update->id);	
+	// LOG("app_settings_update: id=%d", (int)update->id);	
 
     const app_setting_desc_t *desc = app_settings_get_desc(update->id);
     if(desc == NULL) {

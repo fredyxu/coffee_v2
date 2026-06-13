@@ -44,3 +44,5 @@ void ui_nav_back_action(const settings_sub_item_t *item);
 
 // 初始化页面
 esp_err_t ui_page_init(lv_obj_t *p, lv_obj_t **s);
+
+ui_page_id_t ui_get_current_page(void);

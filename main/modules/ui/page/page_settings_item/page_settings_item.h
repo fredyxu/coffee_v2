@@ -1,7 +1,7 @@
 #pragma once
 
 #include "lvgl.h"
-#include "page_settings_data.h"
+#include "modules/ui/page/page_settings/page_settings_data.h"
 
 #ifdef __cplusplus
 extern "C" {

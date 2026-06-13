@@ -6,8 +6,58 @@
 
 #include "config/config_sys.h"
 #include "core/utils/log.h"
+#include "core/msg/msg.h"
+#include "app/app_boot_log.h"
+#include "modules/ui/ui.h"
+#include "modules/ui/ui_actor.h"
 
 static lv_obj_t * log_container;
+static lv_timer_t *s_done_timer;
+
+static void page_init_done_timer_cb(lv_timer_t *timer)
+{
+    if(timer != NULL) {
+        lv_timer_delete(timer);
+    }
+    s_done_timer = NULL;
+
+    ui_nav_go((ui_page_nav_param_t) {
+        .page_id = PAGE_HOME,
+    });
+}
+
+static void page_init_msg_handler(const msg_t *msg)
+{
+    if(msg == NULL || msg->type != MSG_TYPE_SYS) {
+        return;
+    }
+
+    switch(msg->event) {
+    case MSG_EVT_SYS_APP_INIT_INFO:
+        (void)add_init_msg(msg->data.text);
+        break;
+
+    case MSG_EVT_SYS_APP_INIT_DONE:
+        if(s_done_timer == NULL) {
+            s_done_timer = lv_timer_create(page_init_done_timer_cb, 3000, NULL);
+            lv_timer_set_repeat_count(s_done_timer, 1);
+        }
+        break;
+
+    default:
+        break;
+    }
+}
+
+static const ui_page_ops_t page_init_ops = {
+    .on_msg = page_init_msg_handler,
+};
+
+static void page_init_replay_log(const char *text, void *user_data)
+{
+    (void)user_data;
+    (void)add_init_msg(text);
+}
 
 /**
  * 向滚动栏添加一行文字，并自动滚动到底部
@@ -67,11 +117,14 @@ esp_err_t page_init_show(lv_obj_t *p) {
         return ESP_ERR_INVALID_ARG;
     }
 
+    s_done_timer = NULL;
     lv_obj_clean(p);
     lv_obj_set_style_bg_color(p, UI_COLOR_BG, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(p, LV_OPA_COVER, LV_PART_MAIN);
 
     create_auto_scroll_view(p);
+    app_boot_log_for_each(page_init_replay_log, NULL);
+    ui_actor_set_ops(&page_init_ops);
 
     return ESP_OK;
 }

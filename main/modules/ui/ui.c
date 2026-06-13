@@ -11,7 +11,7 @@
 #include "modules/ui/page/page_init/page_init.h"
 #include "modules/ui/page/page_home/page_home.h"
 #include "modules/ui/page/page_settings/page_settings.h"
-#include "modules/ui/page/page_settings/page_settings_item.h"
+#include "modules/ui/page/page_settings_item/page_settings_item.h"
 #include "modules/ui/ui_actor.h"
 
 
@@ -29,7 +29,11 @@ static void ui_screen_init() {
 }
 
 static void ui_nav_push_current(void) {
-	if(s_current_page.page_id >= PAGE_INIT && s_current_page.page_id < PAGE_NONE) {
+	if(s_current_page.page_id == PAGE_INIT || s_current_page.page_id == PAGE_NONE) {
+		return;
+	}
+
+	if(s_current_page.page_id > PAGE_INIT && s_current_page.page_id < PAGE_NONE) {
 		if(ui_nav.depth < UI_ARRAY_SIZE(ui_nav.stack)) {
 			ui_nav.stack[ui_nav.depth++] = s_current_page;
 		} else {
@@ -94,7 +98,7 @@ static void ui_create(void *arg)
 	ui_screen_init();
 	// page_show(PAGE_SETTINGS_ITEM);
 	ui_nav_go((ui_page_nav_param_t) {
-		.page_id = PAGE_HOME,
+		.page_id = PAGE_INIT,
 	});
 	// page_settings_item_show(screen, 0);
 }
@@ -130,4 +134,11 @@ void ui_nav_back_action(const settings_sub_item_t *item)
 {
     (void)item;
     ui_nav_back();
+}
+
+
+
+ui_page_id_t ui_get_current_page(void)
+{
+    return s_current_page.page_id;
 }

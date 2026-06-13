@@ -106,6 +106,7 @@ static esp_err_t ui_actor_subscribe(void)
         MSG_TOPIC_ENCODER_INPUT,
         MSG_TOPIC_WIFI_EVENT,
         MSG_TOPIC_WEBSOCKET_EVENT,
+        MSG_TOPIC_APP_INIT_EVENT,
     };
     esp_err_t err = msg_sub(s_ui_actor.inbox_q, topics, sizeof(topics) / sizeof(topics[0]), &s_ui_actor.sub);
     if(err != ESP_OK && queue_created) {

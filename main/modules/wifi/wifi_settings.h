@@ -1,6 +1,6 @@
 #pragma once
 
-#include "modules/ui/page/page_settings/page_settings_data.h"
+#include "modules/ui/page/page_settings_item/page_settings_item_data.h"
 #include "modules/wifi/wifi_scan_cache.h"
 
 #ifdef __cplusplus

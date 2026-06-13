@@ -6,11 +6,11 @@
 #include "app/app_settings.h"
 #include "modules/ui/page/components/components_top_status/component_top_status.h"
 #include "modules/ui/page/components/component_keyboard/component_keyboard.h"
-#include "modules/ui/page/page_settings/page_settings_binding.h"
-#include "modules/ui/page/page_settings/page_settings_data.h"
-#include "modules/ui/page/page_settings/page_settings_focus.h"
-#include "modules/ui/page/page_settings/page_settings_item_style.h"
-#include "modules/ui/page/page_settings/page_settings_renderer.h"
+#include "modules/ui/page/page_settings_item/internal/page_settings_binding.h"
+#include "modules/ui/page/page_settings_item/page_settings_item_data.h"
+#include "modules/ui/page/page_settings_item/internal/page_settings_focus.h"
+#include "modules/ui/page/page_settings_item/internal/page_settings_item_style.h"
+#include "modules/ui/page/page_settings_item/internal/page_settings_renderer.h"
 #include "modules/ui/style/ui_style.h"
 #include "core/utils/log.h"
 #include "modules/ui/ui_actor.h"
@@ -95,7 +95,6 @@ static void input_handler(const msg_t *msg)
 					focus_press();
 					break;
 				case MSG_EVT_INPUT_ENCODER_LONG_PRESS:
-					LOG("输入事件: 编码器长按");
 					break;
 				default:
 					LOG("输入事件: 未处理的事件类型 %d", msg->event);
@@ -358,7 +357,7 @@ static void insert_settings_item_list(const settings_sub_item_t *item) {
 // **************************************************
 static void insert_settings_items() {
 	size_t sub_items_count = 0;
-    const settings_sub_item_t *sub_items = page_settings_get_sub_items(s_current_item_id, &sub_items_count);
+    const settings_sub_item_t *sub_items = page_settings_item_get_sub_items(s_current_item_id, &sub_items_count);
     for(size_t i = 0; i < sub_items_count; i++) {
 		switch (sub_items[i].value_type) {
 			// 插入文本项

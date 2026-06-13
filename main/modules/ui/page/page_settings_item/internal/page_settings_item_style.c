@@ -1,4 +1,4 @@
-#include "modules/ui/page/page_settings/page_settings_item_style.h"
+#include "modules/ui/page/page_settings_item/internal/page_settings_item_style.h"
 
 #include "config/config_sys.h"
 #include "modules/ui/style/ui_style.h"
@@ -133,6 +133,7 @@ static void style_init_item_value_char() {
 // 文字项目
 void page_settings_item_apply_style_page_item_text(lv_obj_t *obj_body) {
     lv_obj_add_style(obj_body, &style_text_body, 0);
+	lv_obj_add_style(obj_body, &style_focus_body, LV_STATE_FOCUSED);
 }
 
 

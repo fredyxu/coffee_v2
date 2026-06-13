@@ -1,15 +1,9 @@
 #include "page_settings_data.h"
 
-#include "modules/ui/page/page_settings/sections/page_settings_section_audio.h"
-#include "modules/ui/page/page_settings/sections/page_settings_section_display.h"
-#include "modules/ui/page/page_settings/sections/page_settings_section_key.h"
-#include "modules/ui/page/page_settings/sections/page_settings_section_wifi.h"
-#include "modules/ui/page/page_settings/sections/page_settings_section_ws.h"
-
 static const settings_item_t s_settings_items[] = {
     {
         .id = SETTINGS_ITEM_ID_BACK,
-        .title = "返回",
+        .title = "< 返回",
         .subtitle = "回到主界面",
     },
     {
@@ -55,30 +49,4 @@ const settings_item_t *page_settings_find_item(settings_item_id_t id) {
     }
 
     return NULL;
-}
-
-const settings_sub_item_t *page_settings_get_sub_items(settings_item_id_t id, size_t *count) {
-    if (count != NULL) {
-        *count = 0;
-    }
-
-    switch (id) {
-    case SETTINGS_ITEM_ID_WIFI:
-        return page_settings_section_wifi_get_sub_items(count);
-
-    case SETTINGS_ITEM_ID_AUDIO:
-        return page_settings_section_audio_get_sub_items(count);
-
-    case SETTINGS_ITEM_ID_KEY:
-        return page_settings_section_key_get_sub_items(count);
-
-    case SETTINGS_ITEM_ID_DISPLAY:
-        return page_settings_section_display_get_sub_items(count);
-
-    case SETTINGS_ITEM_ID_WS:
-        return page_settings_section_ws_get_sub_items(count);
-
-    default:
-        return NULL;
-    }
 }

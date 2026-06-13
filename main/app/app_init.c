@@ -1,4 +1,5 @@
 #include "app_init.h"
+#include "app/app_boot_log.h"
 #include "app/app_settings.h"
 #include "config/config_sys_audio.h"
 #include "core/utils/log.h"
@@ -20,6 +21,16 @@
 
 #include "tests/tests.h"
 
+static void app_init_report_info(const char *text)
+{
+	app_boot_log_add(text);
+	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, text, 0);
+}
+
+static void app_init_report_done(void)
+{
+	(void)msg_send_sys_value(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_DONE, 1, 0);
+}
 
 esp_err_t app_startup(void) {
 	// 初始化state
@@ -43,7 +54,7 @@ esp_err_t app_startup(void) {
 		return err;
 	}
 	(void)lcd_set_backlight((uint8_t)app_settings.display_brightness);
-	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "屏幕初始化完成.", 0);
+	app_init_report_info("屏幕初始化完成.");
 
 
 	// 初始化屏幕触控
@@ -52,7 +63,7 @@ esp_err_t app_startup(void) {
 		LOG("APP_INIT: Touch initialization failed");
 		return err;
 	}
-	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "触控初始化完成.", 0);
+	app_init_report_info("触控初始化完成.");
 
 	// 初始化LVGL
 	esp_lcd_panel_io_handle_t io = lcd_get_io();
@@ -61,7 +72,7 @@ esp_err_t app_startup(void) {
 		LOG("LVGL INIT FAILED");
 		return err;
 	}
-	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "LVGL初始化完成.", 0);
+	app_init_report_info("LVGL初始化完成.");
 
 	vTaskDelay(pdMS_TO_TICKS(200));
 
@@ -70,7 +81,7 @@ esp_err_t app_startup(void) {
 		LOG("UI init error");
 		return err;
 	}
-	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "UI初始化完成.", 0);
+	app_init_report_info("UI初始化完成.");
 
 	// 初始化WiFi Actor
 	err = wifi_actor_init();
@@ -78,7 +89,7 @@ esp_err_t app_startup(void) {
 		LOG("APP_INIT: wifi actor init failed");
 		return err;
 	}
-	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "WiFi初始化完成.", 0);
+	app_init_report_info("WiFi初始化完成.");
 
 	// 初始化WebSocket Actor
 	err = ws_actor_init();
@@ -86,7 +97,7 @@ esp_err_t app_startup(void) {
 		LOG("APP_INIT: ws actor init failed");
 		return err;
 	}
-	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "WebSocket初始化完成.", 0);
+	app_init_report_info("WebSocket初始化完成.");
 
 	// 初始化旋转编码器
 	err = encoder_actor_init();
@@ -94,14 +105,14 @@ esp_err_t app_startup(void) {
 		LOG("APP_INIT: encoder actor init failed");
 		return err;
 	}
-	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "旋转编码器初始化完成.", 0);
+	app_init_report_info("旋转编码器初始化完成.");
 	// 初始化音频
 	err = audio_actor_init();
 	if(err != ESP_OK) {
 		LOG("APP_INIT: audio actor init failed");
 		return err;
 	}
-	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "音频初始化完成.", 0);
+	app_init_report_info("音频初始化完成.");
 
 	// 初始化自动键时序 Actor
 	err = cw_keyer_actor_init();
@@ -109,7 +120,7 @@ esp_err_t app_startup(void) {
 		LOG("APP_INIT: cw keyer actor init failed");
 		return err;
 	}
-	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "自动键初始化完成.", 0);
+	app_init_report_info("自动键初始化完成.");
 
 	// 初始化电键 Actor
 	err = key_actor_init();
@@ -117,7 +128,7 @@ esp_err_t app_startup(void) {
 		LOG("APP_INIT: key actor init failed");
 		return err;
 	}
-	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "电键初始化完成.", 0);
+	app_init_report_info("电键初始化完成.");
 #if MIC_INIT_ON_STARTUP
 	// 初始化麦克风
 	err = mic_actor_init();
@@ -125,12 +136,12 @@ esp_err_t app_startup(void) {
 		LOG("APP_INIT: mic actor init failed");
 		return err;
 	}
-	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "麦克风初始化完成.", 0);
+	app_init_report_info("麦克风初始化完成.");
 #else
-	(void)msg_send_sys_text(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_INFO, "麦克风延迟初始化.", 0);
+	app_init_report_info("麦克风延迟初始化.");
 #endif
 
-	
+	app_init_report_done();
 
 	
 

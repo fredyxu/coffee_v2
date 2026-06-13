@@ -1,4 +1,4 @@
-#include "modules/ui/page/page_settings/page_settings_focus.h"
+#include "modules/ui/page/page_settings_item/internal/page_settings_focus.h"
 
 #include <stdio.h>
 
@@ -42,6 +42,15 @@ static int focus_find_index_by_obj(lv_obj_t *obj)
 	}
 
 	return -1;
+}
+
+static void focus_disable_lvgl_click_focus(lv_obj_t *obj)
+{
+	if(obj == NULL) {
+		return;
+	}
+
+	lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICK_FOCUSABLE);
 }
 
 static void focus_touch_event_cb(lv_event_t *e)
@@ -226,6 +235,7 @@ static bool focus_add_at(const settings_sub_item_t *item,
 	s_focus[index] = focus_item;
 
 	lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+	focus_disable_lvgl_click_focus(row);
 	lv_obj_add_event_cb(row, focus_touch_event_cb, LV_EVENT_PRESSED, NULL);
 	lv_obj_add_event_cb(row, focus_touch_event_cb, LV_EVENT_CLICKED, NULL);
 
@@ -319,8 +329,13 @@ void page_settings_focus_set_index(int index)
 		return;
 	}
 
+	for(size_t i = 0; i < s_focus_count; i++) {
+		if(s_focus[i].obj != NULL) {
+			lv_obj_remove_state(s_focus[i].obj, LV_STATE_FOCUSED);
+		}
+	}
+
 	if(s_focus_index >= 0 && s_focus_index < (int)s_focus_count) {
-		lv_obj_remove_state(s_focus[s_focus_index].obj, LV_STATE_FOCUSED);
 		lv_obj_remove_state(s_focus[s_focus_index].obj, LV_STATE_CHECKED);
 	}
 

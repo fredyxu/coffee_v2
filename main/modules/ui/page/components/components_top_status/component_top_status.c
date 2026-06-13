@@ -7,25 +7,18 @@
 #include "ui/theme/color.h"
 #include "ui/theme/font.h"
 #include <stdbool.h>
+#include "modules/ui/ui.h"
 
 #define TOP_STATUS_ICON_HEIGHT 20
 #define STATUS_SIZE 5
 // #define TOP_STATUS_BG_COLOR UI_COLOR_PANEL_2
 #define TOP_STATUS_BG_COLOR UI_COLOR_PANEL
 
-static lv_obj_t *status_body;
-static lv_obj_t *obj_status_body;
-static lv_obj_t *obj_icon_body;
-
 static lv_obj_t *obj_icon_wifi;
 static lv_obj_t *obj_icon_link;
-// static lv_obj_t *obj_icon_bt;
-static lv_obj_t *obj_status;
 
 static lv_obj_t *label_icon_wifi;
 static lv_obj_t *label_icon_link;
-// static lv_obj_t *label_icon_bt;
-static lv_obj_t *label_status;
 
 static lv_style_t style_body;
 static lv_style_t style_icon;
@@ -65,7 +58,7 @@ void ui_top_status_ref_icon(void) {
     }
 
 	if(cur.wifi_connected) {
-		// lv_label_set_text(label_icon_wifi, ICON_WIFI_FULL);
+
 		if(cur.wifi_level < 1) {
 			lv_label_set_text(label_icon_wifi, ICON_WIFI_NO);
 		} else if(cur.wifi_level == 1) {
@@ -84,6 +77,9 @@ void ui_top_status_ref_icon(void) {
 
     lv_label_set_text(label_icon_link, cur.ws_connected ? ICON_LINK_WS_DONE : ICON_LINK_WS_BREAK);
 }
+
+
+
 
 static void init_style(void)
 {
@@ -129,6 +125,24 @@ static void init_style(void)
     style_inited = true;
 }
 
+static void settings_clicked_cb(lv_event_t *e) {
+	if(ui_get_current_page() == PAGE_SETTINGS) {
+		return;
+	}
+
+	if(lv_event_get_code(e) != LV_EVENT_CLICKED) {
+		return;
+	}
+
+	ui_nav_go((ui_page_nav_param_t) {
+        .page_id = PAGE_SETTINGS,
+    });
+
+    lv_indev_t *indev = lv_indev_active();
+    if(indev != NULL) {
+        lv_indev_wait_release(indev);
+    }
+}
 
 esp_err_t ui_add_top_status(lv_obj_t *p)
 {
@@ -138,7 +152,7 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 
 	init_style();
 
-	status_body = lv_obj_create(p);
+	lv_obj_t *status_body = lv_obj_create(p);
     lv_obj_set_size(status_body, DISPLAY_H_RES, CONFIG_UI_TOP_STATUS_HEIGHT);
     lv_obj_align(status_body, LV_ALIGN_TOP_MID, 0, 0);
 	// lv_obj_set_style_bg_color(status_body, UI_COLOR_BG_SECONDARY, 0);
@@ -156,7 +170,7 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 	lv_obj_set_flex_flow(status_body, LV_FLEX_FLOW_ROW);
 	lv_obj_set_flex_align(status_body, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-	obj_status_body = lv_obj_create(status_body);
+	lv_obj_t *obj_status_body = lv_obj_create(status_body);
 	lv_obj_add_style(obj_status_body, &style_body, 0);
 	lv_obj_set_size(obj_status_body, LV_PCT(50), TOP_STATUS_ICON_HEIGHT);
 	lv_obj_set_flex_flow(obj_status_body, LV_FLEX_FLOW_ROW);
@@ -165,7 +179,7 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 						  LV_FLEX_ALIGN_CENTER,
 						  LV_FLEX_ALIGN_CENTER);
 
-	obj_icon_body = lv_obj_create(status_body);
+	lv_obj_t *obj_icon_body = lv_obj_create(status_body);
 	lv_obj_add_style(obj_icon_body, &style_body, 0);
 	lv_obj_set_style_pad_right(obj_icon_body, 5, 0);
 	lv_obj_set_size(obj_icon_body, LV_PCT(50), TOP_STATUS_ICON_HEIGHT);
@@ -175,7 +189,7 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 							LV_FLEX_ALIGN_CENTER, 
 							LV_FLEX_ALIGN_CENTER);
 
-    obj_icon_wifi = lv_obj_create(obj_icon_body);
+    lv_obj_t *obj_icon_wifi = lv_obj_create(obj_icon_body);
 	lv_obj_add_style(obj_icon_wifi, &style_icon, 0);
 	lv_obj_remove_flag(obj_icon_wifi, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -185,7 +199,7 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 	lv_obj_center(label_icon_wifi);
 
 
-	obj_icon_link = lv_obj_create(obj_icon_body);
+	lv_obj_t *obj_icon_link = lv_obj_create(obj_icon_body);
 	lv_obj_add_style(obj_icon_link, &style_icon, 0);
 	lv_obj_remove_flag(obj_icon_link, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -194,14 +208,18 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 	lv_label_set_text(label_icon_link, ICON_LINK_WS_BREAK);
 	lv_obj_center(label_icon_link);
 
-	obj_status = lv_obj_create(obj_status_body);
-	lv_obj_add_style(obj_status, &style_icon, 0);
-	lv_obj_remove_flag(obj_status, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_t *obj_settings_body = lv_obj_create(obj_status_body);
+	lv_obj_add_style(obj_settings_body, &style_icon, 0);
+	lv_obj_remove_flag(obj_settings_body, LV_OBJ_FLAG_SCROLLABLE);
+	lv_obj_add_flag(obj_settings_body, LV_OBJ_FLAG_CLICKABLE);
+	lv_obj_add_event_cb(obj_settings_body, settings_clicked_cb, LV_EVENT_CLICKED, NULL);
 
-	label_status = lv_label_create(obj_status);
-	lv_obj_add_style(label_status, &style_icon_label, 0);
-	lv_label_set_text(label_status, "●");
-	lv_obj_center(label_status);
+	lv_obj_t *label_settings = lv_label_create(obj_settings_body);
+	lv_obj_add_style(label_settings, &style_icon_label, 0);
+	lv_label_set_text(label_settings, ICON_SETTINGS);
+	lv_obj_center(label_settings);
+	lv_obj_remove_flag(label_settings, LV_OBJ_FLAG_CLICKABLE);
+	lv_obj_add_flag(label_settings, LV_OBJ_FLAG_EVENT_BUBBLE);
 
 
 	return ESP_OK;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "lvgl.h"
-#include "modules/ui/page/page_settings/page_settings_focus.h"
+#include "modules/ui/page/page_settings_item/internal/page_settings_focus.h"
 
 #ifdef __cplusplus
 extern "C" {
