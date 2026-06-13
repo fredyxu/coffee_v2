@@ -38,7 +38,7 @@ static lv_style_t style_focus_body;
 static void style_init_focus_body() {
 	lv_style_init(&style_focus_body);
 	lv_style_set_bg_opa(&style_focus_body, LV_OPA_COVER);
-	lv_style_set_border_color(&style_focus_body, UI_COLOR_BORDER);
+	lv_style_set_border_color(&style_focus_body, UI_COLOR_ACCENT);
 	lv_style_set_text_color(&style_focus_body, UI_COLOR_TEXT);
 }
 
@@ -123,17 +123,97 @@ void page_settings_item_apply_style_page_item_int(
 // 字符串样式
 // **************************************************
 static lv_style_t style_text_body;
+static lv_style_t style_text_title_body;
+static lv_style_t style_text_title_label;
+static lv_style_t style_text_value_label;
 // 字符串项目初始化
 static void style_init_item_value_char() {
     ui_style_init_row(&style_text_body);
 	style_body_init(&style_text_body);
 	lv_style_set_pad_left(&style_text_body, CONFIG_UI_MARGIN * 4);
 	lv_style_set_pad_right(&style_text_body, CONFIG_UI_MARGIN * 4);
+	lv_style_set_flex_main_place(&style_text_body, LV_FLEX_ALIGN_SPACE_BETWEEN);
+
+	ui_style_init_row(&style_text_title_body);
+	lv_style_set_size(&style_text_title_body, LV_PCT(100), SETTINGS_ITEM_HEIGHT);
+	lv_style_set_bg_opa(&style_text_title_body, LV_OPA_0);
+	lv_style_set_border_width(&style_text_title_body, 0);
+	lv_style_set_flex_main_place(&style_text_title_body, LV_FLEX_ALIGN_SPACE_BETWEEN);
+
+	ui_style_init_row(&style_text_title_label);
+	lv_style_set_width(&style_text_title_label, LV_PCT(45));
+	lv_style_set_text_font(&style_text_title_label, UI_FONT_12);
+	lv_style_set_text_color(&style_text_title_label, UI_COLOR_TEXT);
+	lv_style_set_text_align(&style_text_title_label, LV_TEXT_ALIGN_LEFT);
+
+	ui_style_init_row(&style_text_value_label);
+	lv_style_set_width(&style_text_value_label, LV_PCT(55));
+	lv_style_set_text_font(&style_text_value_label, UI_FONT_12);
+	lv_style_set_text_color(&style_text_value_label, UI_COLOR_TEXT_MUTED);
+	lv_style_set_text_align(&style_text_value_label, LV_TEXT_ALIGN_RIGHT);
 }
 // 文字项目
-void page_settings_item_apply_style_page_item_text(lv_obj_t *obj_body) {
+void page_settings_item_apply_style_page_item_text(
+	lv_obj_t *obj_body,
+	lv_obj_t *obj_title_body,
+	lv_obj_t *obj_title_label,
+	lv_obj_t *obj_value_label
+) {
     lv_obj_add_style(obj_body, &style_text_body, 0);
+	lv_obj_add_style(obj_title_body, &style_text_title_body, 0);
+	lv_obj_add_style(obj_title_label, &style_text_title_label, 0);
+	lv_obj_add_style(obj_value_label, &style_text_value_label, 0);
 	lv_obj_add_style(obj_body, &style_focus_body, LV_STATE_FOCUSED);
+}
+
+// **************************************************
+// 输入项样式
+// **************************************************
+static lv_style_t style_input_body;
+static lv_style_t style_input_title_body;
+static lv_style_t style_input_title_label;
+static lv_style_t style_input_value_label;
+
+static void style_init_item_value_input() {
+	ui_style_init_column(&style_input_body);
+	style_body_init(&style_input_body);
+	lv_style_set_height(&style_input_body, SETTINGS_ITEM_HEIGHT * 2 + 2);
+	lv_style_set_pad_top(&style_input_body, CONFIG_UI_MARGIN);
+	lv_style_set_pad_bottom(&style_input_body, CONFIG_UI_MARGIN);
+	lv_style_set_pad_row(&style_input_body, CONFIG_UI_MARGIN / 2);
+
+	ui_style_init_row(&style_input_title_body);
+	lv_style_set_size(&style_input_title_body, LV_PCT(100), SETTINGS_ITEM_HEIGHT * 0.7);
+	lv_style_set_bg_opa(&style_input_title_body, LV_OPA_0);
+	lv_style_set_border_width(&style_input_title_body, 0);
+	lv_style_set_flex_main_place(&style_input_title_body, LV_FLEX_ALIGN_START);
+
+	ui_style_init_row(&style_input_title_label);
+	lv_style_set_size(&style_input_title_label, LV_PCT(100), SETTINGS_ITEM_HEIGHT * 0.7);
+	lv_style_set_text_font(&style_input_title_label, UI_FONT_12);
+	lv_style_set_text_color(&style_input_title_label, UI_COLOR_TEXT);
+	lv_style_set_text_align(&style_input_title_label, LV_TEXT_ALIGN_LEFT);
+
+	ui_style_init_row(&style_input_value_label);
+	lv_style_set_size(&style_input_value_label, LV_PCT(100), SETTINGS_ITEM_HEIGHT * 0.7);
+	lv_style_set_text_font(&style_input_value_label, UI_FONT_12);
+	lv_style_set_text_color(&style_input_value_label, UI_COLOR_TEXT_MUTED);
+	lv_style_set_text_align(&style_input_value_label, LV_TEXT_ALIGN_LEFT);
+}
+
+void page_settings_item_apply_style_page_item_input(
+	lv_obj_t *obj_body,
+	lv_obj_t *obj_title_body,
+	lv_obj_t *obj_title_label,
+	lv_obj_t *obj_value_label
+) {
+	lv_obj_add_style(obj_body, &style_input_body, LV_STATE_DEFAULT);
+	lv_obj_add_style(obj_title_body, &style_input_title_body, LV_STATE_DEFAULT);
+	lv_obj_add_style(obj_title_label, &style_input_title_label, LV_STATE_DEFAULT);
+	lv_obj_add_style(obj_value_label, &style_input_value_label, LV_STATE_DEFAULT);
+
+	lv_obj_add_style(obj_body, &style_focus_body, LV_STATE_FOCUSED);
+	lv_obj_add_style(obj_body, &style_edit_body, LV_STATE_CHECKED);
 }
 
 
@@ -275,6 +355,7 @@ void page_settings_item_style_init() {
 	lv_style_set_pad_row(&style_page_item_in_body, 0);
 
     style_init_item_value_char();
+	style_init_item_value_input();
     style_init_item_value_bool();
 	style_init_item_value_list();
 	style_init_item_value_int();

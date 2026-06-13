@@ -1,5 +1,6 @@
 #include "modules/ui/page/page_settings_item/internal/page_settings_focus.h"
 
+#include <stdint.h>
 #include <stdio.h>
 
 #include "core/utils/log.h"
@@ -18,6 +19,7 @@ static bool focus_item_can_focus(settings_value_type_t value_type)
 	switch(value_type) {
 		case SETTINGS_VALUE_TYPE_TEXT:
 		case SETTINGS_VALUE_TYPE_PASSWORD:
+		case SETTINGS_VALUE_TYPE_INPUT:
 		case SETTINGS_VALUE_TYPE_BOOL:
 		case SETTINGS_VALUE_TYPE_INT:
 		case SETTINGS_VALUE_TYPE_LIST:
@@ -220,6 +222,7 @@ static bool focus_add_at(const settings_sub_item_t *item,
 
 			case SETTINGS_VALUE_TYPE_TEXT:
 			case SETTINGS_VALUE_TYPE_PASSWORD:
+			case SETTINGS_VALUE_TYPE_INPUT:
 				(void)snprintf(focus_item.value_str, sizeof(focus_item.value_str), "%s", (const char *)item->value);
 				break;
 
@@ -360,4 +363,31 @@ void page_settings_focus_move(int step)
 	}
 
 	page_settings_focus_set_index(new_index);
+}
+
+void page_settings_focus_refresh_values(void)
+{
+	for(size_t i = 0; i < s_focus_count; i++) {
+		page_settings_item_focus_item_t *focus = &s_focus[i];
+		if(focus->item == NULL || focus->item->value == NULL || focus->value_label == NULL) {
+			continue;
+		}
+
+		switch(focus->value_type) {
+			case SETTINGS_VALUE_TYPE_TEXT:
+			case SETTINGS_VALUE_TYPE_PASSWORD:
+			case SETTINGS_VALUE_TYPE_INPUT:
+				lv_label_set_text(focus->value_label, (const char *)focus->item->value);
+				(void)snprintf(focus->value_str, sizeof(focus->value_str), "%s", (const char *)focus->item->value);
+				break;
+
+			case SETTINGS_VALUE_TYPE_INT:
+				focus->value_int = *(int32_t *)focus->item->value;
+				lv_label_set_text_fmt(focus->value_label, "%d", focus->value_int);
+				break;
+
+			default:
+				break;
+		}
+	}
 }

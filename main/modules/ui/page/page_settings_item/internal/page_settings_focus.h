@@ -67,6 +67,7 @@ bool page_settings_focus_add_list_at(const settings_sub_item_t *item,
 void page_settings_focus_remove_sub_item(settings_sub_item_id_t sub_item_id);
 void page_settings_focus_set_index(int index);
 void page_settings_focus_move(int step);
+void page_settings_focus_refresh_values(void);
 
 #ifdef __cplusplus
 }

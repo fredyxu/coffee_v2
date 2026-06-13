@@ -32,3 +32,16 @@ const settings_sub_item_t *page_settings_item_get_sub_items(settings_item_id_t i
         return NULL;
     }
 }
+
+bool page_settings_item_handle_msg(settings_item_id_t id, const msg_t *msg)
+{
+    switch(id) {
+    case SETTINGS_ITEM_ID_WS:
+        return page_settings_section_ws_handle_msg(msg);
+
+    default:
+        break;
+    }
+
+    return false;
+}

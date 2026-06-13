@@ -153,19 +153,39 @@ void page_settings_renderer_insert_text(lv_obj_t *parent, const settings_sub_ite
 	lv_obj_t *obj_body = lv_obj_create(parent);
 	lv_obj_t *obj_title_body = lv_obj_create(obj_body);
 	lv_obj_t *obj_title_label = lv_label_create(obj_title_body);
-	lv_obj_t *obj_value_label = lv_label_create(obj_title_body);
+	lv_obj_t *obj_value_label = NULL;
 	lv_label_set_text(obj_title_label, item->title ? item->title : "");
-	lv_label_set_text(obj_value_label, item->value != NULL ? (const char *)item->value : "");
 	renderer_make_display_only(obj_title_body);
 	renderer_make_display_only(obj_title_label);
-	renderer_make_display_only(obj_value_label);
 
-	page_settings_item_apply_style_page_item_text(obj_body);
-	lv_obj_set_style_text_font(obj_title_label, UI_FONT_12, 0);
-	lv_obj_set_style_text_color(obj_title_label, UI_COLOR_TEXT, 0);
-	lv_obj_set_style_text_font(obj_value_label, UI_FONT_12, 0);
-	lv_obj_set_style_text_color(obj_value_label, UI_COLOR_TEXT_MUTED, 0);
-	page_settings_focus_add(item, obj_body, NULL, obj_value_label, false);
+	if(item->value_type == SETTINGS_VALUE_TYPE_INPUT) {
+		obj_value_label = lv_label_create(obj_body);
+		lv_label_set_text(obj_value_label, item->value != NULL ? (const char *)item->value : "");
+		lv_label_set_long_mode(obj_value_label, LV_LABEL_LONG_DOT);
+		renderer_make_display_only(obj_value_label);
+		page_settings_item_apply_style_page_item_input(
+			obj_body,
+			obj_title_body,
+			obj_title_label,
+			obj_value_label
+		);
+	} else {
+		obj_value_label = lv_label_create(obj_title_body);
+		lv_label_set_text(obj_value_label, item->value != NULL ? (const char *)item->value : "");
+		renderer_make_display_only(obj_value_label);
+		lv_label_set_long_mode(obj_value_label, LV_LABEL_LONG_DOT);
+		page_settings_item_apply_style_page_item_text(
+			obj_body,
+			obj_title_body,
+			obj_title_label,
+			obj_value_label
+		);
+	}
+	if(item->readonly) {
+		renderer_make_display_only(obj_body);
+	} else {
+		page_settings_focus_add(item, obj_body, NULL, obj_value_label, false);
+	}
 	ui_style_insert_line_1(parent);
 }
 

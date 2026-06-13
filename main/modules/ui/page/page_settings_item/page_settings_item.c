@@ -67,6 +67,15 @@ static void focus_rotate(int step);
 static void focus_press(void);
 static void page_msg_handler(const msg_t *msg);
 static void focus_activate_from_touch(page_settings_item_focus_item_t *focus, void *user_data);
+static void rerender_settings_items(void);
+
+typedef struct {
+	bool valid;
+	settings_sub_item_id_t sub_item_id;
+	settings_value_type_t value_type;
+	char value_str[65];
+	int fallback_index;
+} saved_focus_t;
 
 
 
@@ -157,17 +166,26 @@ static void settings_text_keyboard_event_cb(ui_keyboard_event_t event, const cha
 	switch(event) {
 		case UI_KEYBOARD_EVT_SUBMIT:
 			if(focus != NULL && focus->item != NULL && focus->item->has_setting_id) {
+				const char *submit_text = text ? text : "";
+				if(focus->value_type == SETTINGS_VALUE_TYPE_INPUT &&
+				   submit_text[0] == '\0' &&
+				   focus->item->value != NULL) {
+					submit_text = (const char *)focus->item->value;
+				}
 				esp_err_t err = app_settings_update(&(app_settings_update_t) {
 					.id = focus->item->setting_id,
-					.value.str = text ? text : "",
+					.value.str = submit_text,
 				});
 				if(err != ESP_OK) {
 					LOG("settings text update failed: id=%d err=%d", focus->item->setting_id, err);
 				}
 				if(focus->value_label != NULL) {
-					lv_label_set_text(focus->value_label, text ? text : "");
+					lv_label_set_text(focus->value_label, submit_text);
 				}
-				(void)snprintf(focus->value_str, sizeof(focus->value_str), "%s", text ? text : "");
+				(void)snprintf(focus->value_str, sizeof(focus->value_str), "%s", submit_text);
+				if(err == ESP_OK && focus->item->on_change != NULL) {
+					focus->item->on_change(focus->item);
+				}
 			}
 			s_keyboard = NULL;
 			break;
@@ -184,7 +202,10 @@ static void settings_text_keyboard_event_cb(ui_keyboard_event_t event, const cha
 
 static void focus_activate_from_touch(page_settings_item_focus_item_t *focus, void *user_data)
 {
-	if(focus != NULL && (focus->value_type == SETTINGS_VALUE_TYPE_LIST || focus->value_type == SETTINGS_VALUE_TYPE_ACTION)) {
+	if(focus != NULL &&
+	   (focus->value_type == SETTINGS_VALUE_TYPE_LIST ||
+	    focus->value_type == SETTINGS_VALUE_TYPE_ACTION ||
+	    focus->value_type == SETTINGS_VALUE_TYPE_INPUT)) {
 		focus_press();
 	}
 }
@@ -237,7 +258,7 @@ static void focus_open_settings_text_keyboard(page_settings_item_focus_item_t *f
 	s_keyboard = ui_keyboard_modal_create(&(ui_keyboard_config_t) {
 		.parent = page_body ? page_body : lv_scr_act(),
 		.title = focus->item->title,
-		.placeholder = focus->item->title,
+		.placeholder = focus->item->subtitle ? focus->item->subtitle : focus->item->title,
 		.buffer = s_settings_text_buffer,
 		.buffer_size = sizeof(s_settings_text_buffer),
 		.password_mode = focus->value_type == SETTINGS_VALUE_TYPE_PASSWORD,
@@ -256,6 +277,7 @@ static void focus_press(void)
 	switch(focus->value_type) {
 		case SETTINGS_VALUE_TYPE_TEXT:
 		case SETTINGS_VALUE_TYPE_PASSWORD:
+		case SETTINGS_VALUE_TYPE_INPUT:
 			focus_open_settings_text_keyboard(focus);
 			break;
 
@@ -363,6 +385,7 @@ static void insert_settings_items() {
 			// 插入文本项
 			case SETTINGS_VALUE_TYPE_TEXT:
 			case SETTINGS_VALUE_TYPE_PASSWORD:
+			case SETTINGS_VALUE_TYPE_INPUT:
 				page_settings_renderer_insert_text(page_item_in_body, &sub_items[i]);
 				break;
 			// 插入布尔项
@@ -387,6 +410,78 @@ static void insert_settings_items() {
 		
 }
 
+static saved_focus_t save_current_focus(void)
+{
+	saved_focus_t saved = {
+		.valid = false,
+		.fallback_index = page_settings_focus_index(),
+	};
+	page_settings_item_focus_item_t *focus = page_settings_focus_current();
+	if(focus == NULL) {
+		return saved;
+	}
+
+	saved.valid = true;
+	saved.sub_item_id = focus->sub_item_id;
+	saved.value_type = focus->value_type;
+	if(focus->value_str[0] != '\0') {
+		(void)snprintf(saved.value_str, sizeof(saved.value_str), "%s", focus->value_str);
+	}
+
+	return saved;
+}
+
+static int find_restored_focus_index(const saved_focus_t *saved)
+{
+	if(saved == NULL || !saved->valid) {
+		return -1;
+	}
+
+	for(size_t i = 0; i < page_settings_focus_count(); i++) {
+		page_settings_item_focus_item_t *focus = page_settings_focus_get_by_index((int)i);
+		if(focus == NULL || focus->sub_item_id != saved->sub_item_id) {
+			continue;
+		}
+
+		if(saved->value_type == SETTINGS_VALUE_TYPE_LIST && saved->value_str[0] != '\0') {
+			if(strcmp(focus->value_str, saved->value_str) != 0) {
+				continue;
+			}
+		}
+
+		return (int)i;
+	}
+
+	if(saved->fallback_index >= 0 && saved->fallback_index < (int)page_settings_focus_count()) {
+		return saved->fallback_index;
+	}
+
+	return -1;
+}
+
+static void restore_focus_after_rerender(const saved_focus_t *saved)
+{
+	int restored_index = find_restored_focus_index(saved);
+	if(restored_index >= 0) {
+		page_settings_focus_set_index(restored_index);
+	}
+}
+
+static void rerender_settings_items(void)
+{
+	if(page_item_in_body == NULL) {
+		return;
+	}
+
+	saved_focus_t saved = save_current_focus();
+	page_settings_focus_reset();
+	page_settings_focus_set_activate_cb(focus_activate_from_touch, NULL);
+	list_views_reset();
+	lv_obj_clean(page_item_in_body);
+	insert_settings_items();
+	restore_focus_after_rerender(&saved);
+}
+
 static void page_msg_handler(const msg_t *msg)
 {
 	if(msg == NULL) {
@@ -394,6 +489,12 @@ static void page_msg_handler(const msg_t *msg)
 	}
 
 	if(msg->type == MSG_TYPE_SYS) {
+		bool changed = page_settings_item_handle_msg(s_current_item_id, msg);
+		if(changed) {
+			rerender_settings_items();
+			return;
+		}
+		page_settings_focus_refresh_values();
 		list_views_refresh_all();
 	}
 }

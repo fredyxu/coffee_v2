@@ -216,6 +216,7 @@ page_settings_binding_result_t page_settings_binding_press(page_settings_item_fo
 
 			if(focus->item != NULL && focus->item->on_action != NULL) {
 				focus->item->on_action(focus->item);
+				page_settings_focus_refresh_values();
 				return PAGE_SETTINGS_BINDING_RESULT_VALUE_CHANGED;
 			}
 

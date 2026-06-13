@@ -18,6 +18,7 @@ typedef enum {
     SETTINGS_VALUE_TYPE_LIST,
     SETTINGS_VALUE_TYPE_PASSWORD,
     SETTINGS_VALUE_TYPE_ACTION,
+	SETTINGS_VALUE_TYPE_INPUT,
 } settings_value_type_t;
 
 typedef struct settings_sub_item_t settings_sub_item_t;
@@ -40,12 +41,14 @@ typedef enum {
 
     SETTINGS_SUB_ITEM_ID_DISPLAY_BRIGHTNESS,
 
+    SETTINGS_SUB_ITEM_ID_WS_STATUS,
     SETTINGS_SUB_ITEM_ID_WS_ENABLE,
     SETTINGS_SUB_ITEM_ID_WS_URL,
     SETTINGS_SUB_ITEM_ID_WS_ROOM,
     SETTINGS_SUB_ITEM_ID_WS_CALLSIGN,
     SETTINGS_SUB_ITEM_ID_WS_AUTO_RECONNECT,
     SETTINGS_SUB_ITEM_ID_WS_RECONNECT,
+	SETTINGS_SUB_ITEM_ID_WS_SET_DEFAULT_URL,
 
     SETTINGS_SUB_ITEM_ID_KEY_ENABLE,
     SETTINGS_SUB_ITEM_ID_KEY_MODE,
@@ -103,6 +106,8 @@ struct settings_sub_item_t {
     bool has_setting_id;
     app_setting_id_t setting_id;
 
+    bool readonly;
+
     const settings_value_list_source_t *value_source;
 
     bool has_cmd_event;
@@ -117,6 +122,7 @@ struct settings_sub_item_t {
 };
 
 const settings_sub_item_t *page_settings_item_get_sub_items(settings_item_id_t id, size_t *count);
+bool page_settings_item_handle_msg(settings_item_id_t id, const msg_t *msg);
 
 #ifdef __cplusplus
 }

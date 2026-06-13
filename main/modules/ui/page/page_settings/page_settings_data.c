@@ -11,6 +11,11 @@ static const settings_item_t s_settings_items[] = {
         .title = "WiFi",
         .subtitle = "无线网络设置",
     },
+	{
+        .id = SETTINGS_ITEM_ID_WS,
+        .title = "WebSocket",
+        .subtitle = "WebSocket服务器设置",
+    },
     {
         .id = SETTINGS_ITEM_ID_KEY,
         .title = "电键",
@@ -26,11 +31,7 @@ static const settings_item_t s_settings_items[] = {
         .title = "显示",
         .subtitle = "调节屏幕亮度",
     },
-    {
-        .id = SETTINGS_ITEM_ID_WS,
-        .title = "WebSocket",
-        .subtitle = "WebSocket服务器设置",
-    },
+    
 };
 
 const settings_item_t *page_settings_get_items(size_t *count) {
