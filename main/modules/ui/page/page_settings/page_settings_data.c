@@ -3,7 +3,7 @@
 static const settings_item_t s_settings_items[] = {
     {
         .id = SETTINGS_ITEM_ID_BACK,
-        .title = "< 返回",
+        .title = "返回",
         .subtitle = "回到主界面",
     },
     {

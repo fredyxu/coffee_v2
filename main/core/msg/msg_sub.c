@@ -157,6 +157,18 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
             *out_topic = MSG_TOPIC_KEY_INPUT;
             return ESP_OK;
 
+        case MSG_EVT_INPUT_CW_RAW_SYMBOL:
+            *out_topic = MSG_TOPIC_CW_INPUT;
+            return ESP_OK;
+
+        case MSG_EVT_INPUT_CW_DISPLAY_SYMBOL:
+            *out_topic = MSG_TOPIC_CW_OUTPUT;
+            return ESP_OK;
+
+        case MSG_EVT_CMD_KEY_REFRESH_MODE:
+            *out_topic = MSG_TOPIC_KEY_CMD;
+            return ESP_OK;
+
         case MSG_EVT_CMD_AUDIO_TONE:
         case MSG_EVT_CMD_AUDIO_TONE_ON:
         case MSG_EVT_CMD_AUDIO_TONE_OFF:

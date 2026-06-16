@@ -231,7 +231,7 @@ static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
         .key = "auto_di_ms",
         .target = &app_settings.key_auto_di_ms,
         .target_size = sizeof(app_settings.key_auto_di_ms),
-        .min_i32 = 0,
+        .min_i32 = 1,
         .max_i32 = INT32_MAX,
         .dirty_bit = (1u << APP_SETTING_ID_KEY_AUTO_DI_MS),
 		.default_value.i32 = KEY_DEFAULT_AUTO_DI_MS,
@@ -245,6 +245,16 @@ static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
         .target_size = sizeof(app_settings.key_auto_da_ratio),
         .dirty_bit = (1u << APP_SETTING_ID_KEY_AUTO_DA_RATIO),
 		.default_value.str = KEY_DEFAULT_AUTO_DA_RATIO,
+    },
+    [APP_SETTING_ID_KEY_AUTO_GAP_RATIO] = {
+        .id = APP_SETTING_ID_KEY_AUTO_GAP_RATIO,
+        .type = STORE_KV_STR,
+        .namespace_name = APP_SETTINGS_NS_KEY,
+        .key = "auto_gap_ratio",
+        .target = app_settings.key_auto_gap_ratio,
+        .target_size = sizeof(app_settings.key_auto_gap_ratio),
+        .dirty_bit = (1u << APP_SETTING_ID_KEY_AUTO_GAP_RATIO),
+		.default_value.str = KEY_DEFAULT_AUTO_GAP_RATIO,
     },
     [APP_SETTING_ID_KEY_TONE_HZ] = {
         .id = APP_SETTING_ID_KEY_TONE_HZ,
@@ -281,6 +291,16 @@ static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
         .max_i32 = 100,
         .dirty_bit = (1u << APP_SETTING_ID_DISPLAY_BRIGHTNESS),
 		.default_value.i32 = 50,
+    },
+    [APP_SETTING_ID_CW_DECODE_DISPLAY_ENABLE] = {
+        .id = APP_SETTING_ID_CW_DECODE_DISPLAY_ENABLE,
+        .type = STORE_KV_BOOL,
+        .namespace_name = APP_SETTINGS_NS_DISPLAY,
+        .key = "cw_decode",
+        .target = &app_settings.cw_decode_display_enable,
+        .target_size = sizeof(app_settings.cw_decode_display_enable),
+        .dirty_bit = (1u << APP_SETTING_ID_CW_DECODE_DISPLAY_ENABLE),
+		.default_value.b = false,
     },
 };
 
@@ -456,12 +476,16 @@ static void *app_settings_snapshot_target(const app_settings_t *snapshot, app_se
             return (void *)&snapshot->key_auto_di_ms;
         case APP_SETTING_ID_KEY_AUTO_DA_RATIO:
             return (void *)snapshot->key_auto_da_ratio;
+        case APP_SETTING_ID_KEY_AUTO_GAP_RATIO:
+            return (void *)snapshot->key_auto_gap_ratio;
         case APP_SETTING_ID_KEY_TONE_HZ:
             return (void *)&snapshot->key_tone_hz;
         case APP_SETTING_ID_AUDIO_VOLUME:
             return (void *)&snapshot->audio_volume;
         case APP_SETTING_ID_DISPLAY_BRIGHTNESS:
             return (void *)&snapshot->display_brightness;
+        case APP_SETTING_ID_CW_DECODE_DISPLAY_ENABLE:
+            return (void *)&snapshot->cw_decode_display_enable;
         default:
             return NULL;
     }

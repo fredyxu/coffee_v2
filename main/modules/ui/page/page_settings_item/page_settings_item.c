@@ -205,7 +205,10 @@ static void focus_activate_from_touch(page_settings_item_focus_item_t *focus, vo
 	if(focus != NULL &&
 	   (focus->value_type == SETTINGS_VALUE_TYPE_LIST ||
 	    focus->value_type == SETTINGS_VALUE_TYPE_ACTION ||
-	    focus->value_type == SETTINGS_VALUE_TYPE_INPUT)) {
+	    focus->value_type == SETTINGS_VALUE_TYPE_INPUT ||
+	    (focus->value_type == SETTINGS_VALUE_TYPE_TEXT &&
+	     focus->item != NULL &&
+	     focus->item->on_action != NULL))) {
 		focus_press();
 	}
 }
@@ -276,6 +279,13 @@ static void focus_press(void)
 
 	switch(focus->value_type) {
 		case SETTINGS_VALUE_TYPE_TEXT:
+			if(focus->item != NULL && focus->item->on_action != NULL) {
+				(void)page_settings_binding_press(focus);
+				break;
+			}
+			focus_open_settings_text_keyboard(focus);
+			break;
+
 		case SETTINGS_VALUE_TYPE_PASSWORD:
 		case SETTINGS_VALUE_TYPE_INPUT:
 			focus_open_settings_text_keyboard(focus);
@@ -369,7 +379,7 @@ static void insert_settings_item_list(const settings_sub_item_t *item) {
 	page_settings_list_view_t *view = &s_list_views[s_list_view_count++];
 	view->item = item;
 	view->body = page_settings_renderer_create_list_container(page_item_in_body);
-	view->line = ui_style_insert_line_1(page_item_in_body);
+	view->line = NULL;
 	view->focus_insert_index = page_settings_focus_count();
 	list_view_render(view);
 }
@@ -377,34 +387,45 @@ static void insert_settings_item_list(const settings_sub_item_t *item) {
 // **************************************************
 // 插入项目
 // **************************************************
+static bool insert_settings_item(const settings_sub_item_t *item)
+{
+	if(item == NULL) {
+		return false;
+	}
+
+	switch (item->value_type) {
+		// 插入文本项
+		case SETTINGS_VALUE_TYPE_TEXT:
+		case SETTINGS_VALUE_TYPE_PASSWORD:
+		case SETTINGS_VALUE_TYPE_INPUT:
+			page_settings_renderer_insert_text(page_item_in_body, item);
+			return true;
+		// 插入布尔项
+		case SETTINGS_VALUE_TYPE_BOOL:
+			page_settings_renderer_insert_bool(page_item_in_body, item);
+			return true;
+		// 插入列表项
+		case SETTINGS_VALUE_TYPE_LIST:
+			insert_settings_item_list(item);
+			return true;
+		case SETTINGS_VALUE_TYPE_INT:
+			page_settings_renderer_insert_int(page_item_in_body, item, focus_slider_event_cb);
+			return true;
+		case SETTINGS_VALUE_TYPE_ACTION:
+			page_settings_renderer_insert_action(page_item_in_body, item);
+			return true;
+		default:
+			LOG("未知的项目类型: %d", item->value_type);
+			return false;
+	}
+}
+
 static void insert_settings_items() {
 	size_t sub_items_count = 0;
     const settings_sub_item_t *sub_items = page_settings_item_get_sub_items(s_current_item_id, &sub_items_count);
     for(size_t i = 0; i < sub_items_count; i++) {
-		switch (sub_items[i].value_type) {
-			// 插入文本项
-			case SETTINGS_VALUE_TYPE_TEXT:
-			case SETTINGS_VALUE_TYPE_PASSWORD:
-			case SETTINGS_VALUE_TYPE_INPUT:
-				page_settings_renderer_insert_text(page_item_in_body, &sub_items[i]);
-				break;
-			// 插入布尔项
-			case SETTINGS_VALUE_TYPE_BOOL:
-				page_settings_renderer_insert_bool(page_item_in_body, &sub_items[i]);
-				break;
-			// 插入列表项
-			case SETTINGS_VALUE_TYPE_LIST:
-				insert_settings_item_list(&sub_items[i]);
-				break;
-			case SETTINGS_VALUE_TYPE_INT:
-				page_settings_renderer_insert_int(page_item_in_body, &sub_items[i], focus_slider_event_cb);
-				break;
-			case SETTINGS_VALUE_TYPE_ACTION:
-				page_settings_renderer_insert_action(page_item_in_body, &sub_items[i]);
-				break;
-			default:
-				LOG("未知的项目类型: %d", sub_items[i].value_type);
-				break;
+		if(insert_settings_item(&sub_items[i]) && i + 1 < sub_items_count) {
+			ui_style_insert_line_1(page_item_in_body);
 		}
 	}
 		

@@ -149,7 +149,7 @@ static void style_init_item_value_char() {
 	ui_style_init_row(&style_text_value_label);
 	lv_style_set_width(&style_text_value_label, LV_PCT(55));
 	lv_style_set_text_font(&style_text_value_label, UI_FONT_12);
-	lv_style_set_text_color(&style_text_value_label, UI_COLOR_TEXT_MUTED);
+	lv_style_set_text_color(&style_text_value_label, UI_COLOR_ACCENT);
 	lv_style_set_text_align(&style_text_value_label, LV_TEXT_ALIGN_RIGHT);
 }
 // 文字项目

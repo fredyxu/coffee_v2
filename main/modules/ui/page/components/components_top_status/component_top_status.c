@@ -189,7 +189,7 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 							LV_FLEX_ALIGN_CENTER, 
 							LV_FLEX_ALIGN_CENTER);
 
-    lv_obj_t *obj_icon_wifi = lv_obj_create(obj_icon_body);
+    obj_icon_wifi = lv_obj_create(obj_icon_body);
 	lv_obj_add_style(obj_icon_wifi, &style_icon, 0);
 	lv_obj_remove_flag(obj_icon_wifi, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -199,7 +199,7 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 	lv_obj_center(label_icon_wifi);
 
 
-	lv_obj_t *obj_icon_link = lv_obj_create(obj_icon_body);
+	obj_icon_link = lv_obj_create(obj_icon_body);
 	lv_obj_add_style(obj_icon_link, &style_icon, 0);
 	lv_obj_remove_flag(obj_icon_link, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -221,6 +221,7 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 	lv_obj_remove_flag(label_settings, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(label_settings, LV_OBJ_FLAG_EVENT_BUBBLE);
 
+	ui_top_status_ref_icon();
 
 	return ESP_OK;
 }

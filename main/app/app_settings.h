@@ -35,9 +35,11 @@ typedef enum {
     APP_SETTING_ID_KEY_MANUAL_ADAPTIVE_ENABLE,
     APP_SETTING_ID_KEY_AUTO_DI_MS,
     APP_SETTING_ID_KEY_AUTO_DA_RATIO,
+    APP_SETTING_ID_KEY_AUTO_GAP_RATIO,
     APP_SETTING_ID_KEY_TONE_HZ,
     APP_SETTING_ID_AUDIO_VOLUME,
     APP_SETTING_ID_DISPLAY_BRIGHTNESS,
+    APP_SETTING_ID_CW_DECODE_DISPLAY_ENABLE,
     APP_SETTING_ID_MAX,
 } app_setting_id_t;
 
@@ -72,9 +74,11 @@ typedef struct {
     bool key_manual_adaptive_enable;
     int32_t key_auto_di_ms;
     char key_auto_da_ratio[8];
+    char key_auto_gap_ratio[8];
     int32_t key_tone_hz;
     int32_t audio_volume;
     int32_t display_brightness;
+    bool cw_decode_display_enable;
 } app_settings_t;
 
 extern app_settings_t app_settings;

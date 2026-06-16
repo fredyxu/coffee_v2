@@ -1,10 +1,47 @@
 #include "modules/ui/page/page_settings_item/internal/page_settings_binding.h"
 
 #include <stdint.h>
+#include <stdio.h>
 
 #include "esp_err.h"
 #include "core/msg/msg.h"
 #include "core/utils/log.h"
+#include "modules/ui/ui.h"
+
+static void binding_format_int_value(const settings_sub_item_t *item, int value, char *buffer, size_t buffer_size)
+{
+	if(buffer == NULL || buffer_size == 0) {
+		return;
+	}
+
+	if(item != NULL && item->format_value != NULL) {
+		int32_t temp_value = value;
+		settings_sub_item_t temp_item = *item;
+		temp_item.value = &temp_value;
+		item->format_value(&temp_item, buffer, buffer_size);
+		return;
+	}
+
+	(void)snprintf(buffer, buffer_size, "%d", value);
+}
+
+static void binding_preview_int_value(page_settings_item_focus_item_t *focus)
+{
+	if(focus == NULL || focus->item == NULL || focus->item->on_preview_change == NULL) {
+		return;
+	}
+
+	focus->item->on_preview_change(focus->item, focus->value_int);
+}
+
+static void binding_refresh_values_if_page_active(void)
+{
+	if(ui_get_current_page() != PAGE_SETTINGS_ITEM) {
+		return;
+	}
+
+	page_settings_focus_refresh_values();
+}
 
 static int binding_read_int(const settings_sub_item_t *item)
 {
@@ -86,8 +123,12 @@ static void binding_adjust_int(page_settings_item_focus_item_t *focus, int step)
 	}
 
 	if(focus->value_label != NULL) {
-		lv_label_set_text_fmt(focus->value_label, "%d", focus->value_int);
+		char text[16];
+		binding_format_int_value(focus->item, focus->value_int, text, sizeof(text));
+		lv_label_set_text(focus->value_label, text);
 	}
+
+	binding_preview_int_value(focus);
 }
 
 static void binding_toggle_bool(page_settings_item_focus_item_t *focus)
@@ -140,6 +181,8 @@ static void binding_apply_edit(page_settings_item_focus_item_t *focus)
 		esp_err_t err = binding_write_int(focus->item, focus->value_int);
 		if(err != ESP_OK) {
 			LOG("settings int update failed: id=%d err=%d", focus->item->id, err);
+		} else if(focus->item->on_change != NULL) {
+			focus->item->on_change(focus->item);
 		}
 	}
 
@@ -159,8 +202,12 @@ static void binding_sync_int_from_slider(page_settings_item_focus_item_t *focus)
 	focus->value_int = (int)lv_slider_get_value(focus->control);
 
 	if(focus->value_label != NULL) {
-		lv_label_set_text_fmt(focus->value_label, "%d", focus->value_int);
+		char text[16];
+		binding_format_int_value(focus->item, focus->value_int, text, sizeof(text));
+		lv_label_set_text(focus->value_label, text);
 	}
+
+	binding_preview_int_value(focus);
 }
 
 page_settings_binding_result_t page_settings_binding_rotate_current(int step)
@@ -192,6 +239,14 @@ page_settings_binding_result_t page_settings_binding_press(page_settings_item_fo
 	}
 
 	switch(focus->value_type) {
+		case SETTINGS_VALUE_TYPE_TEXT:
+			if(focus->item != NULL && focus->item->on_action != NULL) {
+				focus->item->on_action(focus->item);
+				binding_refresh_values_if_page_active();
+				return PAGE_SETTINGS_BINDING_RESULT_VALUE_CHANGED;
+			}
+			return PAGE_SETTINGS_BINDING_RESULT_UNHANDLED;
+
 		case SETTINGS_VALUE_TYPE_BOOL:
 			binding_toggle_bool(focus);
 			return PAGE_SETTINGS_BINDING_RESULT_VALUE_CHANGED;
@@ -216,7 +271,7 @@ page_settings_binding_result_t page_settings_binding_press(page_settings_item_fo
 
 			if(focus->item != NULL && focus->item->on_action != NULL) {
 				focus->item->on_action(focus->item);
-				page_settings_focus_refresh_values();
+				binding_refresh_values_if_page_active();
 				return PAGE_SETTINGS_BINDING_RESULT_VALUE_CHANGED;
 			}
 

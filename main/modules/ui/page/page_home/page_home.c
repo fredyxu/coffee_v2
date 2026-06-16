@@ -1,6 +1,10 @@
 #include "page_home.h"
 #include "lvgl.h"
 
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "ui/theme/color.h"
 #include "ui/theme/font.h"
 #include "ui/page/components/components_top_status/component_top_status.h"
@@ -11,6 +15,7 @@
 #include "config/config_ui.h"
 #include "modules/ui/style/ui_style.h"
 #include "core/msg/msg.h"
+#include "modules/key/cw_keyer_actor.h"
 #include "modules/ui/ui_actor.h"
 
 #define HOME_PAGE_BOTTOM_BODY_HEIGHT 30
@@ -22,7 +27,75 @@ static lv_obj_t *msg_body;
 static lv_obj_t *context_body;
 static lv_obj_t *context_input_body;
 static lv_obj_t *btn_send;
+static lv_obj_t *label_cw_input;
+static char *s_cw_display_text;
+static size_t s_cw_display_len;
+static size_t s_cw_display_cap;
 
+static bool page_home_display_reserve(size_t needed)
+{
+	if(needed <= s_cw_display_cap) {
+		return true;
+	}
+
+	size_t next_cap = s_cw_display_cap > 0 ? s_cw_display_cap : 128;
+	while(next_cap < needed) {
+		next_cap *= 2;
+	}
+
+	char *next = (char *)realloc(s_cw_display_text, next_cap);
+	if(next == NULL) {
+		return false;
+	}
+
+	s_cw_display_text = next;
+	s_cw_display_cap = next_cap;
+	return true;
+}
+
+static void page_home_refresh_cw_display(void)
+{
+	if(label_cw_input == NULL) {
+		return;
+	}
+
+	lv_label_set_text(label_cw_input, s_cw_display_text != NULL ? s_cw_display_text : "");
+	lv_obj_update_layout(label_cw_input);
+	lv_obj_align(label_cw_input, LV_ALIGN_RIGHT_MID, 0, 0);
+}
+
+static void page_home_append_cw_symbol(const char *symbol)
+{
+	if(symbol == NULL || symbol[0] == '\0') {
+		return;
+	}
+
+	size_t symbol_len = strlen(symbol);
+	size_t needed = s_cw_display_len + symbol_len + 1;
+	if(!page_home_display_reserve(needed)) {
+		return;
+	}
+
+	memcpy(s_cw_display_text + s_cw_display_len, symbol, symbol_len);
+	s_cw_display_len += symbol_len;
+	s_cw_display_text[s_cw_display_len] = '\0';
+	page_home_refresh_cw_display();
+}
+
+static void page_home_set_cw_display_text(const char *text)
+{
+	size_t text_len = text != NULL ? strlen(text) : 0;
+	if(!page_home_display_reserve(text_len + 1)) {
+		return;
+	}
+
+	if(text_len > 0) {
+		memcpy(s_cw_display_text, text, text_len);
+	}
+	s_cw_display_len = text_len;
+	s_cw_display_text[s_cw_display_len] = '\0';
+	page_home_refresh_cw_display();
+}
 
 // 事件处理
 static void page_home_input_handler(const msg_t *msg)
@@ -36,6 +109,11 @@ static void page_home_input_handler(const msg_t *msg)
         ui_nav_go((ui_page_nav_param_t) {
             .page_id = PAGE_SETTINGS,
         });
+		return;
+    }
+
+    if(msg->event == MSG_EVT_INPUT_CW_DISPLAY_SYMBOL) {
+		page_home_append_cw_symbol(msg->data.text);
     }
 }
 
@@ -94,6 +172,14 @@ esp_err_t page_home_show(lv_obj_t *p) {
 	lv_obj_set_style_border_width(context_input_body, 0, 0);
 	lv_obj_set_style_pad_all(context_input_body, 0, 0);
 	lv_obj_set_style_margin_all(context_input_body, 0, 0);
+	lv_obj_remove_flag(context_input_body, LV_OBJ_FLAG_SCROLLABLE);
+
+	label_cw_input = lv_label_create(context_input_body);
+	lv_obj_set_style_text_font(label_cw_input, UI_FONT_14, 0);
+	lv_obj_set_style_text_color(label_cw_input, UI_COLOR_TEXT_DARK, 0);
+	lv_obj_set_style_text_align(label_cw_input, LV_TEXT_ALIGN_RIGHT, 0);
+	lv_label_set_long_mode(label_cw_input, LV_LABEL_LONG_CLIP);
+	page_home_set_cw_display_text(cw_keyer_actor_get_display_text());
 
 	btn_send = lv_obj_create(context_body);
 	lv_obj_set_style_size(btn_send, HOME_PAGE_BTN_WIDTH, HOME_PAGE_BOTTOM_BODY_HEIGHT, 0);

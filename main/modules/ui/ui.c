@@ -96,12 +96,14 @@ static void ui_create(void *arg)
 {
 	ui_style_init();
 	ui_screen_init();
-	// page_show(PAGE_SETTINGS_ITEM);
 	ui_nav_go((ui_page_nav_param_t) {
-		.page_id = PAGE_SETTINGS_ITEM,
-		.settings_item_id = SETTINGS_ITEM_ID_WS,
+		.page_id = PAGE_INIT,
 	});
-	// page_settings_item_show(screen, 0);
+	// ui_nav_go((ui_page_nav_param_t) {
+	// 	.page_id = PAGE_SETTINGS_ITEM,
+	// 	.settings_item_id = SETTINGS_ITEM_ID_WS,
+	// });
+
 }
 
 esp_err_t ui_init(void)

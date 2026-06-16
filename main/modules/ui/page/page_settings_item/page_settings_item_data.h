@@ -25,6 +25,8 @@ typedef struct settings_sub_item_t settings_sub_item_t;
 typedef struct settings_value_list_t settings_value_list_t;
 typedef void (*settings_action_cb_t)(const settings_sub_item_t *item);
 typedef void (*settings_change_cb_t)(const settings_sub_item_t *item);
+typedef void (*settings_preview_change_cb_t)(const settings_sub_item_t *item, int value);
+typedef void (*settings_value_format_cb_t)(const settings_sub_item_t *item, char *buffer, size_t buffer_size);
 typedef void (*settings_value_list_action_cb_t)(const settings_value_list_t *item, void *user_data);
 
 typedef enum {
@@ -38,8 +40,11 @@ typedef enum {
 
     SETTINGS_SUB_ITEM_ID_AUDIO_VOLUME,
     SETTINGS_SUB_ITEM_ID_AUDIO_TONE,
+	SETTINGS_SUB_ITEM_ID_AUDIO_RESET_DEFAULTS,
 
     SETTINGS_SUB_ITEM_ID_DISPLAY_BRIGHTNESS,
+    SETTINGS_SUB_ITEM_ID_DISPLAY_CW_DECODE,
+	SETTINGS_SUB_ITEM_ID_DISPLAY_RESET_DEFAULTS,
 
     SETTINGS_SUB_ITEM_ID_WS_STATUS,
     SETTINGS_SUB_ITEM_ID_WS_ENABLE,
@@ -58,7 +63,10 @@ typedef enum {
     SETTINGS_SUB_ITEM_ID_KEY_MANUAL_ADAPTIVE_ENABLE,
     SETTINGS_SUB_ITEM_ID_KEY_AUTO_DI_MS,
     SETTINGS_SUB_ITEM_ID_KEY_AUTO_DA_RATIO,
+    SETTINGS_SUB_ITEM_ID_KEY_AUTO_GAP_RATIO,
     SETTINGS_SUB_ITEM_ID_KEY_TONE_HZ,
+	SETTINGS_SUB_ITEM_ID_KEY_RESET_DEBOUNCE,
+	SETTINGS_SUB_ITEM_ID_KEY_RESET_DEFAULTS,
 } settings_sub_item_id_t;
 
 typedef enum {
@@ -119,6 +127,8 @@ struct settings_sub_item_t {
 
     settings_action_cb_t on_action;
     settings_change_cb_t on_change;
+    settings_preview_change_cb_t on_preview_change;
+    settings_value_format_cb_t format_value;
 };
 
 const settings_sub_item_t *page_settings_item_get_sub_items(settings_item_id_t id, size_t *count);

@@ -20,9 +20,10 @@
 #define KEY_DEFAULT_MANUAL_DI_MS 120
 #define KEY_DEFAULT_MANUAL_ADAPTIVE_ENABLE 0
 
-/* 自动键 DI 时长。0 表示使用 manual_di_ms * 0.7。 */
-#define KEY_DEFAULT_AUTO_DI_MS 0
+/* 自动键 DI 时长。 */
+#define KEY_DEFAULT_AUTO_DI_MS 80
 #define KEY_DEFAULT_AUTO_DA_RATIO "2.2"
+#define KEY_DEFAULT_AUTO_GAP_RATIO "0.5"
 
 /* 侧音。 */
 #define KEY_DEFAULT_TONE_HZ 700
@@ -30,7 +31,7 @@
 /* 电码文本缓冲区。msg_t.data.text 当前为 64 字节。 */
 #define KEY_CODE_MAX_LEN 64
 
-#define KEY_GROUP_GAP_RATIO 1.2f
+#define KEY_GROUP_GAP_RATIO 3.0f
 #define KEY_AUTO_DI_FALLBACK_RATIO 0.7f
 
 #define KEY_ACTOR_QUEUE_LEN 8

@@ -214,6 +214,23 @@ static esp_err_t wifi_actor_connect_profile(const wifi_profile_t *profile)
 	return wifi_actor_request_connect();
 }
 
+static esp_err_t wifi_actor_connect_saved_settings(void)
+{
+	if(app_settings.wifi_ssid[0] == '\0') {
+		return ESP_ERR_INVALID_ARG;
+	}
+
+	esp_err_t err = wifi_module_set_credentials(app_settings.wifi_ssid, app_settings.wifi_password);
+	if(err != ESP_OK) {
+		LOG("wifi saved credentials apply failed: ssid=%s err=%s", app_settings.wifi_ssid, esp_err_to_name(err));
+		return err;
+	}
+
+	LOG("wifi auto flow: connect saved ssid=%s", app_settings.wifi_ssid);
+	wifi_actor_set_active_credentials(app_settings.wifi_ssid, app_settings.wifi_password);
+	return wifi_actor_request_connect();
+}
+
 static bool wifi_actor_can_auto_connect(void)
 {
 	return app_settings.wifi_enable &&
@@ -222,19 +239,19 @@ static bool wifi_actor_can_auto_connect(void)
 	       !wifi_module_is_connected();
 }
 
-static void wifi_actor_try_auto_connect_from_scan(void)
+static bool wifi_actor_try_auto_connect_from_scan(void)
 {
 	if(!wifi_actor_can_auto_connect()) {
-		return;
+		return false;
 	}
 
 	wifi_profile_t profile = {0};
 	if(!wifi_profile_select_best_from_scan(&profile)) {
-		return;
+		return false;
 	}
 
 	// LOG("wifi auto connect profile: %s", profile.ssid);
-	(void)wifi_actor_connect_profile(&profile);
+	return wifi_actor_connect_profile(&profile) == ESP_OK;
 }
 
 static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
@@ -303,7 +320,9 @@ static void wifi_actor_emit_sys_event(const wifi_module_event_t *event)
 	                wifi_settings_ssid_set_empty_result();
 	            }
 	            wifi_settings_ssid_refresh_connected();
-	            wifi_actor_try_auto_connect_from_scan();
+	            if(!wifi_actor_try_auto_connect_from_scan() && wifi_actor_can_auto_connect()) {
+	                (void)wifi_actor_connect_saved_settings();
+	            }
 	            (void)msg_send_sys_value(MSG_SRC_WIFI, MSG_EVT_SYS_WIFI_SCAN_DONE, event->ap_count, 0);
 	            break;
         case WIFI_MOD_EVT_SCAN_FAILED:
@@ -367,13 +386,17 @@ static esp_err_t wifi_actor_start_auto_flow(void)
 
 	if(profile_count > 0) {
 		// LOG("wifi auto flow: scan saved profiles");
-		return wifi_actor_scan_networks();
+		esp_err_t scan_err = wifi_actor_scan_networks();
+		if(scan_err == ESP_OK || app_settings.wifi_ssid[0] == '\0') {
+			return scan_err;
+		}
+
+		LOG("wifi auto flow: scan failed, fallback saved ssid err=%s", esp_err_to_name(scan_err));
+		return wifi_actor_connect_saved_settings();
 	}
 
 	if(app_settings.wifi_ssid[0] != '\0') {
-		LOG("wifi auto flow: connect saved ssid=%s", app_settings.wifi_ssid);
-		wifi_actor_set_active_credentials(app_settings.wifi_ssid, app_settings.wifi_password);
-		return wifi_actor_request_connect();
+		return wifi_actor_connect_saved_settings();
 	}
 
 	// LOG("wifi auto flow: no saved profile, scan only");

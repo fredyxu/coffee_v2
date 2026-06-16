@@ -1,5 +1,8 @@
 #include "modules/ui/page/page_settings_item/internal/page_settings_renderer.h"
 
+#include <stdint.h>
+#include <stdio.h>
+
 #include "modules/ui/page/page_settings_item/internal/page_settings_focus.h"
 #include "modules/ui/page/page_settings_item/internal/page_settings_item_style.h"
 #include "modules/ui/style/ui_style.h"
@@ -50,6 +53,23 @@ static void renderer_disable_click_focus(lv_obj_t *obj)
 	}
 
 	lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+}
+
+static void renderer_format_int_value(const settings_sub_item_t *item, int value, char *buffer, size_t buffer_size)
+{
+	if(buffer == NULL || buffer_size == 0) {
+		return;
+	}
+
+	if(item != NULL && item->format_value != NULL) {
+		int32_t temp_value = value;
+		settings_sub_item_t temp_item = *item;
+		temp_item.value = &temp_value;
+		item->format_value(&temp_item, buffer, buffer_size);
+		return;
+	}
+
+	(void)snprintf(buffer, buffer_size, "%d", value);
 }
 
 lv_obj_t *page_settings_renderer_create_list_container(lv_obj_t *parent)
@@ -122,7 +142,6 @@ void page_settings_renderer_insert_static_list(lv_obj_t *parent, const settings_
 			page_settings_focus_count()
 		);
 	}
-	ui_style_insert_line_1(parent);
 }
 
 void page_settings_renderer_insert_action(lv_obj_t *parent, const settings_sub_item_t *item)
@@ -141,7 +160,6 @@ void page_settings_renderer_insert_action(lv_obj_t *parent, const settings_sub_i
 		false,
 		page_settings_focus_count()
 	);
-	ui_style_insert_line_1(parent);
 }
 
 void page_settings_renderer_insert_text(lv_obj_t *parent, const settings_sub_item_t *item)
@@ -186,7 +204,6 @@ void page_settings_renderer_insert_text(lv_obj_t *parent, const settings_sub_ite
 	} else {
 		page_settings_focus_add(item, obj_body, NULL, obj_value_label, false);
 	}
-	ui_style_insert_line_1(parent);
 }
 
 void page_settings_renderer_insert_bool(lv_obj_t *parent, const settings_sub_item_t *item)
@@ -213,7 +230,6 @@ void page_settings_renderer_insert_bool(lv_obj_t *parent, const settings_sub_ite
 
 	page_settings_item_apply_style_page_item_bool(obj_body, obj_title_body, obj_title_label, obj_switch);
 	page_settings_focus_add(item, obj_body, obj_switch, NULL, false);
-	ui_style_insert_line_1(parent);
 }
 
 void page_settings_renderer_insert_int(lv_obj_t *parent,
@@ -225,13 +241,14 @@ void page_settings_renderer_insert_int(lv_obj_t *parent,
 	}
 
 	lv_obj_t *obj_body = lv_obj_create(parent);
+	int value = *(int *)item->value;
 	lv_obj_t *obj_title_body = lv_obj_create(obj_body);
 	lv_obj_t *obj_title_label = lv_label_create(obj_title_body);
 	lv_obj_t *obj_value_label = lv_label_create(obj_title_body);
 	lv_obj_t *obj_slider_body = lv_obj_create(obj_body);
 	lv_obj_t *obj_slider = lv_slider_create(obj_slider_body);
 	lv_slider_set_range(obj_slider, item->min_value, item->max_value);
-	lv_slider_set_value(obj_slider, *(int *)item->value, LV_ANIM_OFF);
+	lv_slider_set_value(obj_slider, value, LV_ANIM_OFF);
 	renderer_make_display_only(obj_title_body);
 	renderer_make_display_only(obj_title_label);
 	renderer_make_display_only(obj_value_label);
@@ -239,7 +256,9 @@ void page_settings_renderer_insert_int(lv_obj_t *parent,
 	renderer_disable_click_focus(obj_slider);
 
 	lv_label_set_text(obj_title_label, item->title);
-	lv_label_set_text_fmt(obj_value_label, "%d", *(int *)item->value);
+	char value_text[16];
+	renderer_format_int_value(item, value, value_text, sizeof(value_text));
+	lv_label_set_text(obj_value_label, value_text);
 
 	page_settings_item_apply_style_page_item_int(
 		obj_body,

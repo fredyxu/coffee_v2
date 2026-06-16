@@ -7,6 +7,23 @@
 
 #define PAGE_SETTINGS_FOCUS_MAX 32
 
+static void focus_format_int_value(const settings_sub_item_t *item, int value, char *buffer, size_t buffer_size)
+{
+	if(buffer == NULL || buffer_size == 0) {
+		return;
+	}
+
+	if(item != NULL && item->format_value != NULL) {
+		int32_t temp_value = value;
+		settings_sub_item_t temp_item = *item;
+		temp_item.value = &temp_value;
+		item->format_value(&temp_item, buffer, buffer_size);
+		return;
+	}
+
+	(void)snprintf(buffer, buffer_size, "%d", value);
+}
+
 static page_settings_item_focus_item_t s_focus[PAGE_SETTINGS_FOCUS_MAX];
 static size_t s_focus_count;
 static int s_focus_index = -1;
@@ -383,7 +400,12 @@ void page_settings_focus_refresh_values(void)
 
 			case SETTINGS_VALUE_TYPE_INT:
 				focus->value_int = *(int32_t *)focus->item->value;
-				lv_label_set_text_fmt(focus->value_label, "%d", focus->value_int);
+				char text[16];
+				focus_format_int_value(focus->item, focus->value_int, text, sizeof(text));
+				lv_label_set_text(focus->value_label, text);
+				if(focus->control != NULL) {
+					lv_slider_set_value(focus->control, focus->value_int, LV_ANIM_OFF);
+				}
 				break;
 
 			default:
