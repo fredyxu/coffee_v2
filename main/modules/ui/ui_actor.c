@@ -37,6 +37,7 @@ static void ui_actor_dispatch_sys_msg(const msg_t *msg)
 
 	(void)status_apply_sys_msg(msg);
 	ui_top_status_handle_sys_msg(msg);
+
 }
 
 static void ui_actor_dispatch_input(void *arg)

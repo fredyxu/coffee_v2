@@ -32,10 +32,6 @@ static void display_reset_defaults_action(const settings_sub_item_t *item)
         .id = APP_SETTING_ID_DISPLAY_BRIGHTNESS,
         .value.i32 = DISPLAY_DEFAULT_BRIGHTNESS,
     });
-    (void)app_settings_update(&(app_settings_update_t) {
-        .id = APP_SETTING_ID_CW_DECODE_DISPLAY_ENABLE,
-        .value.b = false,
-    });
 }
 
 static settings_sub_item_t s_display_sub_items[] = {
@@ -56,14 +52,6 @@ static settings_sub_item_t s_display_sub_items[] = {
         .has_setting_id = true,
         .setting_id = APP_SETTING_ID_DISPLAY_BRIGHTNESS,
         .on_preview_change = display_brightness_preview_change,
-    },
-    {
-        .id = SETTINGS_SUB_ITEM_ID_DISPLAY_CW_DECODE,
-        .value_type = SETTINGS_VALUE_TYPE_BOOL,
-        .title = "电码转义显示",
-        .value = &app_settings.cw_decode_display_enable,
-        .has_setting_id = true,
-        .setting_id = APP_SETTING_ID_CW_DECODE_DISPLAY_ENABLE,
     },
     {
         .id = SETTINGS_SUB_ITEM_ID_DISPLAY_RESET_DEFAULTS,

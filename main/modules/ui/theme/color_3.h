@@ -1,5 +1,7 @@
 #pragma once
 
+#define UI_COLOR_WHITE					lv_color_hex(0xFFFFFF)
+
 #define UI_COLOR_BG						lv_color_hex(0x080A0D)
 #define UI_COLOR_PANEL					lv_color_hex(0x12161B)
 #define UI_COLOR_PANEL_2				lv_color_hex(0x1B2128)

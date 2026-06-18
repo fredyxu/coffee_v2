@@ -198,7 +198,7 @@ static esp_err_t ft_probe(void)
     uint8_t lib_ver[2] = {0};
     err = ft_read_regs(FT_REG_ID_G_LIB_VERSION_H, lib_ver, 2);
     if(err == ESP_OK) {
-        uint16_t ver = ((uint16_t)lib_ver[0] << 8) | lib_ver[1];
+        // uint16_t ver = ((uint16_t)lib_ver[0] << 8) | lib_ver[1];
         // LOG("lib version: 0x%04X", ver);
     } else {
         LOG("read LIB_VERSION failed: %s", esp_err_to_name(err));

@@ -13,6 +13,7 @@
 
 static lv_obj_t * log_container;
 static lv_timer_t *s_done_timer;
+static int32_t s_init_goto_home_countdown = 1000;
 
 static void page_init_done_timer_cb(lv_timer_t *timer)
 {
@@ -39,7 +40,7 @@ static void page_init_msg_handler(const msg_t *msg)
 
     case MSG_EVT_SYS_APP_INIT_DONE:
         if(s_done_timer == NULL) {
-            s_done_timer = lv_timer_create(page_init_done_timer_cb, 3000, NULL);
+            s_done_timer = lv_timer_create(page_init_done_timer_cb, s_init_goto_home_countdown, NULL);
             lv_timer_set_repeat_count(s_done_timer, 1);
         }
         break;

@@ -24,6 +24,8 @@
 #define APP_SETTINGS_NS_KEY "key"
 #define APP_SETTINGS_NS_AUDIO "audio"
 #define APP_SETTINGS_NS_DISPLAY "display"
+#define APP_SETTINGS_NS_MORSE "morse"
+#define APP_SETTINGS_NS_USER "user"
 
 #define APP_SETTINGS_SAVE_DEBOUNCE_TICKS pdMS_TO_TICKS(500)
 #define APP_SETTINGS_SAVE_TASK_STACK 4096
@@ -295,12 +297,44 @@ static const app_setting_desc_t s_setting_descs[APP_SETTING_ID_MAX] = {
     [APP_SETTING_ID_CW_DECODE_DISPLAY_ENABLE] = {
         .id = APP_SETTING_ID_CW_DECODE_DISPLAY_ENABLE,
         .type = STORE_KV_BOOL,
-        .namespace_name = APP_SETTINGS_NS_DISPLAY,
+        .namespace_name = APP_SETTINGS_NS_MORSE,
         .key = "cw_decode",
         .target = &app_settings.cw_decode_display_enable,
         .target_size = sizeof(app_settings.cw_decode_display_enable),
         .dirty_bit = (1u << APP_SETTING_ID_CW_DECODE_DISPLAY_ENABLE),
 		.default_value.b = false,
+    },
+    [APP_SETTING_ID_MORSE_AUTO_SEND_ENABLE] = {
+        .id = APP_SETTING_ID_MORSE_AUTO_SEND_ENABLE,
+        .type = STORE_KV_BOOL,
+        .namespace_name = APP_SETTINGS_NS_MORSE,
+        .key = "auto_send",
+        .target = &app_settings.morse_auto_send_enable,
+        .target_size = sizeof(app_settings.morse_auto_send_enable),
+        .dirty_bit = (1u << APP_SETTING_ID_MORSE_AUTO_SEND_ENABLE),
+		.default_value.b = false,
+    },
+    [APP_SETTING_ID_MORSE_AUTO_SEND_DELAY_MS] = {
+        .id = APP_SETTING_ID_MORSE_AUTO_SEND_DELAY_MS,
+        .type = STORE_KV_I32,
+        .namespace_name = APP_SETTINGS_NS_MORSE,
+        .key = "auto_send_delay",
+        .target = &app_settings.morse_auto_send_delay_ms,
+        .target_size = sizeof(app_settings.morse_auto_send_delay_ms),
+        .min_i32 = 500,
+        .max_i32 = 10000,
+        .dirty_bit = (1u << APP_SETTING_ID_MORSE_AUTO_SEND_DELAY_MS),
+		.default_value.i32 = 3000,
+    },
+    [APP_SETTING_ID_USER_CALLSIGN] = {
+        .id = APP_SETTING_ID_USER_CALLSIGN,
+        .type = STORE_KV_STR,
+        .namespace_name = APP_SETTINGS_NS_USER,
+        .key = "callsign",
+        .target = app_settings.user_callsign,
+        .target_size = sizeof(app_settings.user_callsign),
+        .dirty_bit = (1u << APP_SETTING_ID_USER_CALLSIGN),
+		.default_value.str = USER_DEFAULT_CALLSIGN,
     },
 };
 
@@ -486,6 +520,12 @@ static void *app_settings_snapshot_target(const app_settings_t *snapshot, app_se
             return (void *)&snapshot->display_brightness;
         case APP_SETTING_ID_CW_DECODE_DISPLAY_ENABLE:
             return (void *)&snapshot->cw_decode_display_enable;
+        case APP_SETTING_ID_MORSE_AUTO_SEND_ENABLE:
+            return (void *)&snapshot->morse_auto_send_enable;
+        case APP_SETTING_ID_MORSE_AUTO_SEND_DELAY_MS:
+            return (void *)&snapshot->morse_auto_send_delay_ms;
+        case APP_SETTING_ID_USER_CALLSIGN:
+            return (void *)snapshot->user_callsign;
         default:
             return NULL;
     }

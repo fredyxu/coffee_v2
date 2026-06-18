@@ -8,12 +8,14 @@ extern "C" {
 
 typedef enum {
     SETTINGS_ITEM_ID_BACK = 0,
+	SETTINGS_ITEM_ID_USER,
     SETTINGS_ITEM_ID_WIFI,
     SETTINGS_ITEM_ID_BT,
     SETTINGS_ITEM_ID_KEY,
     SETTINGS_ITEM_ID_AUDIO,
     SETTINGS_ITEM_ID_DISPLAY,
     SETTINGS_ITEM_ID_WS,
+    SETTINGS_ITEM_ID_MORSE,
 } settings_item_id_t;
 
 typedef struct {

@@ -40,6 +40,9 @@ typedef enum {
     APP_SETTING_ID_AUDIO_VOLUME,
     APP_SETTING_ID_DISPLAY_BRIGHTNESS,
     APP_SETTING_ID_CW_DECODE_DISPLAY_ENABLE,
+    APP_SETTING_ID_MORSE_AUTO_SEND_ENABLE,
+    APP_SETTING_ID_MORSE_AUTO_SEND_DELAY_MS,
+	APP_SETTING_ID_USER_CALLSIGN,
     APP_SETTING_ID_MAX,
 } app_setting_id_t;
 
@@ -79,6 +82,9 @@ typedef struct {
     int32_t audio_volume;
     int32_t display_brightness;
     bool cw_decode_display_enable;
+    bool morse_auto_send_enable;
+    int32_t morse_auto_send_delay_ms;
+	char user_callsign[65];
 } app_settings_t;
 
 extern app_settings_t app_settings;

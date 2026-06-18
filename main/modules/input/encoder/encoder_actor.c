@@ -105,18 +105,18 @@ static void encoder_process_sw(void)
 
 static TickType_t encoder_sw_wait_ticks(void)
 {
-    if(!s_ctx.sw_pressed || s_ctx.sw_long_sent) {
-        return portMAX_DELAY;
+    if(s_ctx.sw_pressed && !s_ctx.sw_long_sent) {
+        TickType_t now = xTaskGetTickCount();
+        TickType_t long_press_ticks = pdMS_TO_TICKS(s_ctx.sw_long_press_ms);
+        TickType_t elapsed = now - s_ctx.sw_press_tick;
+        if(elapsed >= long_press_ticks) {
+            return 0;
+        }
+
+        return long_press_ticks - elapsed;
     }
 
-    TickType_t now = xTaskGetTickCount();
-    TickType_t long_press_ticks = pdMS_TO_TICKS(s_ctx.sw_long_press_ms);
-    TickType_t elapsed = now - s_ctx.sw_press_tick;
-    if(elapsed >= long_press_ticks) {
-        return 0;
-    }
-
-    return long_press_ticks - elapsed;
+    return portMAX_DELAY;
 }
 
 static void encoder_process_sw_long_press(void)

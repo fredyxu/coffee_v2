@@ -17,7 +17,10 @@ file(GLOB SRC_FILES
 		"tests/*/*.c"
 )
 
-list(APPEND SRC_FILES "core/msg/msg_sub.c")
+list(APPEND SRC_FILES
+		"core/msg/msg_sub.c"
+		"modules/ws/ws_cw_cache.c"
+)
 list(REMOVE_DUPLICATES SRC_FILES)
 
 idf_component_register(

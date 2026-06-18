@@ -21,11 +21,17 @@ typedef enum {
 } cw_symbol_t;
 
 #define CW_KEYER_GROUP_MAX 24
+#define CW_KEYER_DELETE_HISTORY_MAX 8
 
 typedef struct {
     const char *code;
     const char *text;
 } cw_decode_item_t;
+
+typedef struct {
+    char text[CW_KEYER_GROUP_MAX];
+    bool had_trailing_space;
+} cw_keyer_deleted_group_t;
 
 typedef struct {
     bool initialized;
@@ -44,6 +50,10 @@ typedef struct {
     char last_group[CW_KEYER_GROUP_MAX];
     size_t last_group_len;
     bool last_group_overflow;
+    cw_keyer_deleted_group_t deleted_groups[CW_KEYER_DELETE_HISTORY_MAX];
+    size_t deleted_group_count;
+    bool auto_send_pending;
+    TickType_t auto_send_deadline;
 } cw_keyer_ctx_t;
 
 static cw_keyer_ctx_t s_keyer = {
@@ -174,6 +184,98 @@ static void cw_keyer_publish_display_symbol(const char *symbol)
     (void)msg_send_input(&msg, 0);
 }
 
+static void cw_keyer_publish_content_state(void)
+{
+    (void)msg_send_input_value(
+        MSG_SRC_CW_KEYER,
+        MSG_EVT_INPUT_CW_CONTENT_STATE,
+        s_keyer.raw_len > 0 ? 1 : 0,
+        0
+    );
+}
+
+static void cw_keyer_publish_text_changed(void)
+{
+    (void)msg_send_input_value(MSG_SRC_CW_KEYER, MSG_EVT_INPUT_CW_TEXT_CHANGED, 1, 0);
+    cw_keyer_publish_content_state();
+}
+
+static void cw_keyer_publish_cleared(void)
+{
+    (void)msg_send_input_value(MSG_SRC_CW_KEYER, MSG_EVT_INPUT_CW_CLEARED, 1, 0);
+    cw_keyer_publish_content_state();
+}
+
+static bool cw_keyer_tick_reached(TickType_t now, TickType_t target)
+{
+    return (int32_t)(now - target) >= 0;
+}
+
+static void cw_keyer_cancel_auto_send(void)
+{
+    s_keyer.auto_send_pending = false;
+}
+
+static void cw_keyer_clear_delete_history(void)
+{
+    s_keyer.deleted_group_count = 0;
+}
+
+static void cw_keyer_push_deleted_group(const char *text, size_t len, bool had_trailing_space)
+{
+    if(text == NULL || len == 0 || len >= CW_KEYER_GROUP_MAX) {
+        return;
+    }
+
+    if(s_keyer.deleted_group_count == CW_KEYER_DELETE_HISTORY_MAX) {
+        memmove(
+            &s_keyer.deleted_groups[0],
+            &s_keyer.deleted_groups[1],
+            sizeof(s_keyer.deleted_groups[0]) * (CW_KEYER_DELETE_HISTORY_MAX - 1)
+        );
+        s_keyer.deleted_group_count--;
+    }
+
+    cw_keyer_deleted_group_t *group = &s_keyer.deleted_groups[s_keyer.deleted_group_count++];
+    memcpy(group->text, text, len);
+    group->text[len] = '\0';
+    group->had_trailing_space = had_trailing_space;
+}
+
+static bool cw_keyer_pop_deleted_group(cw_keyer_deleted_group_t *out_group)
+{
+    if(out_group == NULL || s_keyer.deleted_group_count == 0) {
+        return false;
+    }
+
+    *out_group = s_keyer.deleted_groups[--s_keyer.deleted_group_count];
+    return true;
+}
+
+static void cw_keyer_schedule_auto_send(void)
+{
+    if(!app_settings.morse_auto_send_enable || s_keyer.raw_len == 0) {
+        cw_keyer_cancel_auto_send();
+        return;
+    }
+
+    int32_t delay_ms = app_settings.morse_auto_send_delay_ms;
+    if(delay_ms < 500) {
+        delay_ms = 500;
+    }
+    s_keyer.auto_send_deadline = xTaskGetTickCount() + pdMS_TO_TICKS(delay_ms);
+    s_keyer.auto_send_pending = true;
+}
+
+static void cw_keyer_request_send(void)
+{
+    if(s_keyer.raw_len == 0) {
+        return;
+    }
+
+    (void)msg_send_cmd_value(MSG_SRC_CW_KEYER, MSG_EVT_CMD_WS_SEND_CW, 1, 0);
+}
+
 static bool cw_keyer_buffer_reserve(char **buffer, size_t *cap, size_t needed)
 {
     if(buffer == NULL || cap == NULL) {
@@ -288,15 +390,177 @@ static void cw_keyer_publish_display_text(const char *text)
     }
 }
 
-static void cw_keyer_publish_group_end(void)
+static void cw_keyer_append_display_text(const char *text)
+{
+    (void)cw_keyer_append_to_buffer(
+        &s_keyer.display_text,
+        &s_keyer.display_len,
+        &s_keyer.display_cap,
+        text
+    );
+}
+
+static void cw_keyer_render_group_end(bool publish)
 {
     if(app_settings.cw_decode_display_enable && s_keyer.last_group_len > 0) {
         const char *decoded = cw_keyer_decode_group();
-        cw_keyer_publish_display_text(decoded != NULL ? decoded : "*");
+        const char *text = decoded != NULL ? decoded : "*";
+        if(publish) {
+            cw_keyer_publish_display_text(text);
+        } else {
+            cw_keyer_append_display_text(text);
+        }
     }
 
-    cw_keyer_publish_display_text(" ");
+    if(publish) {
+        cw_keyer_publish_display_text(" ");
+    } else {
+        cw_keyer_append_display_text(" ");
+    }
     cw_keyer_clear_last_group();
+}
+
+static void cw_keyer_publish_group_end(void)
+{
+    cw_keyer_render_group_end(true);
+}
+
+static void cw_keyer_reset_display_state(void)
+{
+    s_keyer.display_len = 0;
+    if(s_keyer.display_text != NULL) {
+        s_keyer.display_text[0] = '\0';
+    }
+    cw_keyer_clear_last_group();
+}
+
+static void cw_keyer_replay_display_symbol(const char *symbol)
+{
+    if(symbol == NULL || symbol[0] == '\0') {
+        return;
+    }
+
+    if(strcmp(symbol, " ") == 0) {
+        cw_keyer_render_group_end(false);
+        return;
+    }
+
+    cw_keyer_append_last_group(symbol);
+    (void)cw_keyer_append_to_buffer(
+        &s_keyer.display_text,
+        &s_keyer.display_len,
+        &s_keyer.display_cap,
+        symbol
+    );
+}
+
+static void cw_keyer_rebuild_display_from_raw(void)
+{
+    cw_keyer_reset_display_state();
+
+    const char *p = s_keyer.raw_text;
+    while(p != NULL && *p != '\0') {
+        if(strncmp(p, "·", strlen("·")) == 0) {
+            cw_keyer_replay_display_symbol("·");
+            p += strlen("·");
+        } else if(*p == '-') {
+            cw_keyer_replay_display_symbol("-");
+            p++;
+        } else if(*p == ' ') {
+            cw_keyer_replay_display_symbol(" ");
+            p++;
+        } else {
+            p++;
+        }
+    }
+}
+
+static void cw_keyer_clear_text(void)
+{
+    s_keyer.raw_len = 0;
+    if(s_keyer.raw_text != NULL) {
+        s_keyer.raw_text[0] = '\0';
+    }
+    s_keyer.display_len = 0;
+    if(s_keyer.display_text != NULL) {
+        s_keyer.display_text[0] = '\0';
+    }
+    cw_keyer_clear_last_group();
+    cw_keyer_clear_delete_history();
+    cw_keyer_cancel_auto_send();
+    cw_keyer_publish_cleared();
+}
+
+static void cw_keyer_delete_last_group(void)
+{
+    if(s_keyer.raw_len == 0 || s_keyer.raw_text == NULL) {
+        return;
+    }
+
+    size_t original_len = s_keyer.raw_len;
+    size_t end = s_keyer.raw_len;
+    while(end > 0 && s_keyer.raw_text[end - 1] == ' ') {
+        end--;
+    }
+
+    if(end == 0) {
+        cw_keyer_clear_text();
+        return;
+    }
+
+    size_t start = end;
+    while(start > 0 && s_keyer.raw_text[start - 1] != ' ') {
+        start--;
+    }
+
+    cw_keyer_push_deleted_group(
+        s_keyer.raw_text + start,
+        end - start,
+        original_len > end
+    );
+
+    s_keyer.raw_len = start;
+    while(s_keyer.raw_len > 0 && s_keyer.raw_text[s_keyer.raw_len - 1] == ' ') {
+        s_keyer.raw_len--;
+    }
+    if(s_keyer.raw_len > 0) {
+        s_keyer.raw_text[s_keyer.raw_len++] = ' ';
+    }
+    s_keyer.raw_text[s_keyer.raw_len] = '\0';
+
+    cw_keyer_cancel_auto_send();
+    cw_keyer_rebuild_display_from_raw();
+    cw_keyer_publish_text_changed();
+}
+
+static void cw_keyer_restore_last_group(void)
+{
+    cw_keyer_deleted_group_t group = {0};
+    if(!cw_keyer_pop_deleted_group(&group) || group.text[0] == '\0') {
+        return;
+    }
+
+    if(s_keyer.raw_len > 0 &&
+       s_keyer.raw_text != NULL &&
+       s_keyer.raw_text[s_keyer.raw_len - 1] != ' ') {
+        if(!cw_keyer_append_to_buffer(&s_keyer.raw_text, &s_keyer.raw_len, &s_keyer.raw_cap, " ")) {
+            return;
+        }
+    }
+
+    if(!cw_keyer_append_to_buffer(&s_keyer.raw_text, &s_keyer.raw_len, &s_keyer.raw_cap, group.text)) {
+        return;
+    }
+
+    if(group.had_trailing_space) {
+        if(!cw_keyer_append_to_buffer(&s_keyer.raw_text, &s_keyer.raw_len, &s_keyer.raw_cap, " ")) {
+            return;
+        }
+    }
+
+    cw_keyer_cancel_auto_send();
+    cw_keyer_rebuild_display_from_raw();
+    cw_keyer_publish_text_changed();
 }
 
 static void cw_keyer_append_raw_symbol(const char *symbol)
@@ -316,11 +580,15 @@ static void cw_keyer_append_raw_symbol(const char *symbol)
 
     if(strcmp(symbol, " ") == 0) {
         cw_keyer_publish_group_end();
+        cw_keyer_schedule_auto_send();
+        cw_keyer_publish_content_state();
         return;
     }
 
+    cw_keyer_cancel_auto_send();
     cw_keyer_append_last_group(symbol);
     cw_keyer_publish_display_text(symbol);
+    cw_keyer_publish_content_state();
 }
 
 static void cw_keyer_apply_msg(const msg_t *msg)
@@ -361,9 +629,38 @@ static void cw_keyer_apply_msg(const msg_t *msg)
                 s_keyer.preferred = CW_SYMBOL_DI;
             }
             break;
+        case MSG_EVT_CMD_CW_SEND:
+            cw_keyer_request_send();
+            break;
+        case MSG_EVT_CMD_CW_DELETE_LAST_GROUP:
+            cw_keyer_delete_last_group();
+            break;
+        case MSG_EVT_CMD_CW_RESTORE_LAST_GROUP:
+            cw_keyer_restore_last_group();
+            break;
+        case MSG_EVT_CMD_CW_CLEAR_DELETE_HISTORY:
+            cw_keyer_clear_delete_history();
+            break;
+        case MSG_EVT_CMD_CW_CLEAR:
+            cw_keyer_clear_text();
+            break;
         default:
             break;
     }
+}
+
+static void cw_keyer_maybe_auto_send(void)
+{
+    if(!s_keyer.auto_send_pending) {
+        return;
+    }
+
+    if(!cw_keyer_tick_reached(xTaskGetTickCount(), s_keyer.auto_send_deadline)) {
+        return;
+    }
+
+    s_keyer.auto_send_pending = false;
+    cw_keyer_request_send();
 }
 
 static void cw_keyer_drain_queue(void)
@@ -419,13 +716,16 @@ static void cw_keyer_task(void *arg)
     while(1) {
         if(!cw_keyer_has_active_request()) {
             msg_t msg;
-            if(xQueueReceive(s_keyer.queue, &msg, portMAX_DELAY) == pdTRUE) {
+            TickType_t wait_ticks = s_keyer.auto_send_pending ? pdMS_TO_TICKS(50) : portMAX_DELAY;
+            if(xQueueReceive(s_keyer.queue, &msg, wait_ticks) == pdTRUE) {
                 cw_keyer_apply_msg(&msg);
             }
+            cw_keyer_maybe_auto_send();
             continue;
         }
 
         cw_keyer_drain_queue();
+        cw_keyer_maybe_auto_send();
         if(!cw_keyer_has_active_request()) {
             continue;
         }

@@ -567,8 +567,8 @@ void ui_keyboard_handle_input(lv_obj_t *modal, const msg_t *msg)
             break;
 
         case MSG_EVT_INPUT_ENCODER_LONG_PRESS:
-            keyboard_emit(ctx, UI_KEYBOARD_EVT_CANCEL);
-            ui_keyboard_modal_close(ctx->root);
+            // keyboard_emit(ctx, UI_KEYBOARD_EVT_CANCEL);
+            // ui_keyboard_modal_close(ctx->root);
             break;
 
         default:

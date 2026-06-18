@@ -162,6 +162,9 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
             return ESP_OK;
 
         case MSG_EVT_INPUT_CW_DISPLAY_SYMBOL:
+        case MSG_EVT_INPUT_CW_CLEARED:
+        case MSG_EVT_INPUT_CW_CONTENT_STATE:
+        case MSG_EVT_INPUT_CW_TEXT_CHANGED:
             *out_topic = MSG_TOPIC_CW_OUTPUT;
             return ESP_OK;
 
@@ -181,6 +184,11 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
         case MSG_EVT_CMD_CW_KEYER_DI_STOP:
         case MSG_EVT_CMD_CW_KEYER_DA_START:
         case MSG_EVT_CMD_CW_KEYER_DA_STOP:
+        case MSG_EVT_CMD_CW_SEND:
+        case MSG_EVT_CMD_CW_DELETE_LAST_GROUP:
+        case MSG_EVT_CMD_CW_RESTORE_LAST_GROUP:
+        case MSG_EVT_CMD_CW_CLEAR_DELETE_HISTORY:
+        case MSG_EVT_CMD_CW_CLEAR:
             *out_topic = MSG_TOPIC_CW_KEYER_CMD;
             return ESP_OK;
 
@@ -196,6 +204,7 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
 
         case MSG_EVT_CMD_WS_SET_ENABLE:
         case MSG_EVT_CMD_WS_RECONNECT:
+        case MSG_EVT_CMD_WS_SEND_CW:
             *out_topic = MSG_TOPIC_WEBSOCKET_CMD;
             return ESP_OK;
 
@@ -213,6 +222,7 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
         case MSG_EVT_SYS_WS_CONNECTED:
         case MSG_EVT_SYS_WS_DISCONNECTED:
         case MSG_EVT_SYS_WS_HEARTBEAT_LOST:
+        case MSG_EVT_SYS_WS_CW_RECEIVED:
             *out_topic = MSG_TOPIC_WEBSOCKET_EVENT;
             return ESP_OK;
 

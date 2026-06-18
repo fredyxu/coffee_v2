@@ -2,6 +2,7 @@
 
 #include <string.h>
 
+#include "config/config_sys.h"
 #include "core/utils/log.h"
 #include "esp_crt_bundle.h"
 #include "esp_websocket_client.h"
@@ -156,7 +157,12 @@ esp_err_t ws_client_send_text(const char *text)
 		return ESP_ERR_INVALID_STATE;
 	}
 
-	int written = esp_websocket_client_send_text(s_client, text, (int)strlen(text), 0);
+	int written = esp_websocket_client_send_text(
+		s_client,
+		text,
+		(int)strlen(text),
+		pdMS_TO_TICKS(WS_SEND_TIMEOUT_MS)
+	);
 	return written >= 0 ? ESP_OK : ESP_FAIL;
 }
 
@@ -166,6 +172,11 @@ esp_err_t ws_client_send_binary(const void *data, int len)
 		return ESP_ERR_INVALID_STATE;
 	}
 
-	int written = esp_websocket_client_send_bin(s_client, data, len, 0);
+	int written = esp_websocket_client_send_bin(
+		s_client,
+		data,
+		len,
+		pdMS_TO_TICKS(WS_SEND_TIMEOUT_MS)
+	);
 	return written >= 0 ? ESP_OK : ESP_FAIL;
 }

@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "app/app_settings.h"
@@ -14,8 +15,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "modules/key/cw_keyer_actor.h"
 #include "modules/wifi/wifi.h"
 #include "modules/ws/ws_client.h"
+#include "modules/ws/ws_cw_cache.h"
 
 #define WS_FINAL_URL_MAX 256
 #define WS_DEVICE_ID_MAX 32
@@ -38,6 +41,7 @@ typedef struct {
 	bool wifi_connected;
 	uint32_t reconnect_delay_ms;
 	TickType_t next_reconnect_tick;
+	TickType_t next_heartbeat_tick;
 	char active_url[WS_FINAL_URL_MAX];
 	TaskHandle_t wifi_stop_waiter;
 	esp_err_t wifi_stop_result;
@@ -83,6 +87,11 @@ static void ws_actor_schedule_reconnect(void)
 
 	s_actor.next_reconnect_tick = xTaskGetTickCount() + pdMS_TO_TICKS(s_actor.reconnect_delay_ms);
 	ws_actor_set_state(WS_ACTOR_STATE_BACKOFF);
+}
+
+static void ws_actor_schedule_heartbeat(void)
+{
+	s_actor.next_heartbeat_tick = xTaskGetTickCount() + pdMS_TO_TICKS(WS_HEARTBEAT_INTERVAL_MS);
 }
 
 static void ws_actor_make_device_id(char *buf, size_t buf_size)
@@ -160,26 +169,29 @@ static esp_err_t ws_actor_build_url(char *buf, size_t buf_size)
 	}
 
 	char device_id[WS_DEVICE_ID_MAX] = {0};
-	char callsign[sizeof(app_settings.ws_callsign) * 3] = {0};
+	char callsign[sizeof(app_settings.user_callsign) * 3] = {0};
 	char room[sizeof(app_settings.ws_room) * 3] = {0};
 	char version[32] = {0};
+	char token[sizeof(WS_DEFAULT_TOKEN) * 3] = {0};
 
 	ws_actor_make_device_id(device_id, sizeof(device_id));
-	(void)ws_actor_url_encode(app_settings.ws_callsign, callsign, sizeof(callsign));
+	(void)ws_actor_url_encode(app_settings.user_callsign, callsign, sizeof(callsign));
 	(void)ws_actor_url_encode(app_settings.ws_room, room, sizeof(room));
 	(void)ws_actor_url_encode(APP_FIRMWARE_VERSION, version, sizeof(version));
+	(void)ws_actor_url_encode(WS_DEFAULT_TOKEN, token, sizeof(token));
 
 	const char joiner = strchr(app_settings.ws_url, '?') == NULL ? '?' : '&';
 	int written = snprintf(
 		buf,
 		buf_size,
-		"%s%cdevice_id=%s&callsign=%s&room=%s&fw_version=%s",
+		"%s%cdevice_id=%s&callsign=%s&room=%s&fw_version=%s&token=%s",
 		app_settings.ws_url,
 		joiner,
 		device_id,
 		callsign,
 		room,
-		version
+		version,
+		token
 	);
 
 	if(written < 0 || (size_t)written >= buf_size) {
@@ -239,6 +251,304 @@ static esp_err_t ws_actor_connect(void)
 	return ESP_OK;
 }
 
+static size_t ws_actor_json_escaped_len(const char *text)
+{
+	size_t len = 0;
+	if(text == NULL) {
+		return 0;
+	}
+
+	for(size_t i = 0; text[i] != '\0'; i++) {
+		unsigned char c = (unsigned char)text[i];
+		if(c == '"' || c == '\\') {
+			len += 2;
+		} else if(c == '\n' || c == '\r' || c == '\t') {
+			len += 2;
+		} else {
+			len += 1;
+		}
+	}
+
+	return len;
+}
+
+static void ws_actor_json_escape(const char *src, char *dst)
+{
+	if(src == NULL || dst == NULL) {
+		return;
+	}
+
+	size_t out = 0;
+	for(size_t i = 0; src[i] != '\0'; i++) {
+		char c = src[i];
+		switch(c) {
+			case '"':
+				dst[out++] = '\\';
+				dst[out++] = '"';
+				break;
+			case '\\':
+				dst[out++] = '\\';
+				dst[out++] = '\\';
+				break;
+			case '\n':
+				dst[out++] = '\\';
+				dst[out++] = 'n';
+				break;
+			case '\r':
+				dst[out++] = '\\';
+				dst[out++] = 'r';
+				break;
+			case '\t':
+				dst[out++] = '\\';
+				dst[out++] = 't';
+				break;
+			default:
+				dst[out++] = c;
+				break;
+		}
+	}
+	dst[out] = '\0';
+}
+
+static void ws_actor_send_cw(void)
+{
+	if(!app_settings.ws_enable || !s_actor.wifi_connected || !wifi_module_is_connected() ||
+	   !ws_client_is_connected()) {
+		return;
+	}
+
+	const char *code = cw_keyer_actor_get_raw_text();
+	if(code == NULL || code[0] == '\0') {
+		return;
+	}
+
+	const char *room = app_settings.ws_room[0] != '\0' ? app_settings.ws_room : "default";
+	const char *room_name = strcmp(room, "default") == 0 ? "大厅" : room;
+	const char *callsign = app_settings.user_callsign;
+
+	size_t room_len = ws_actor_json_escaped_len(room);
+	size_t room_name_len = ws_actor_json_escaped_len(room_name);
+	size_t callsign_len = ws_actor_json_escaped_len(callsign);
+	size_t code_len = ws_actor_json_escaped_len(code);
+
+	size_t json_size = room_len + room_name_len + callsign_len + code_len + 96;
+	char *json = (char *)malloc(json_size);
+	char *room_esc = (char *)malloc(room_len + 1);
+	char *room_name_esc = (char *)malloc(room_name_len + 1);
+	char *callsign_esc = (char *)malloc(callsign_len + 1);
+	char *code_esc = (char *)malloc(code_len + 1);
+	if(json == NULL || room_esc == NULL || room_name_esc == NULL ||
+	   callsign_esc == NULL || code_esc == NULL) {
+		free(json);
+		free(room_esc);
+		free(room_name_esc);
+		free(callsign_esc);
+		free(code_esc);
+		return;
+	}
+
+	ws_actor_json_escape(room, room_esc);
+	ws_actor_json_escape(room_name, room_name_esc);
+	ws_actor_json_escape(callsign, callsign_esc);
+	ws_actor_json_escape(code, code_esc);
+
+	int written = snprintf(
+		json,
+		json_size,
+		"{\"type\":\"cw\",\"room\":\"%s\",\"room_name\":\"%s\",\"callsign\":\"%s\",\"code\":\"%s\"}",
+		room_esc,
+		room_name_esc,
+		callsign_esc,
+		code_esc
+	);
+
+	if(written > 0 && (size_t)written < json_size && ws_client_send_text(json) == ESP_OK) {
+		ws_actor_schedule_heartbeat();
+		(void)msg_send_cmd_value(MSG_SRC_WS, MSG_EVT_CMD_CW_CLEAR, 1, 0);
+	}
+
+	free(json);
+	free(room_esc);
+	free(room_name_esc);
+	free(callsign_esc);
+	free(code_esc);
+}
+
+static void ws_actor_send_heartbeat(void)
+{
+	if(s_actor.state != WS_ACTOR_STATE_CONNECTED || !app_settings.ws_enable ||
+	   !s_actor.wifi_connected || !wifi_module_is_connected()) {
+		return;
+	}
+
+	if(!ws_client_is_connected()) {
+		(void)msg_send_sys_value(MSG_SRC_WS, MSG_EVT_SYS_WS_DISCONNECTED, 0, 0);
+		return;
+	}
+
+	esp_err_t err = ws_client_send_text(WS_HEARTBEAT_PAYLOAD);
+	if(err == ESP_OK) {
+		ws_actor_schedule_heartbeat();
+		return;
+	}
+
+	(void)ws_client_stop();
+	(void)msg_send_sys_value(MSG_SRC_WS, MSG_EVT_SYS_WS_DISCONNECTED, 0, 0);
+}
+
+static char *ws_actor_copy_ws_payload(const ws_client_event_t *event)
+{
+	if(event == NULL || event->data == NULL || event->data_len <= 0) {
+		return NULL;
+	}
+
+	char *text = (char *)malloc((size_t)event->data_len + 1);
+	if(text == NULL) {
+		return NULL;
+	}
+
+	memcpy(text, event->data, (size_t)event->data_len);
+	text[event->data_len] = '\0';
+	return text;
+}
+
+static bool ws_actor_json_get_string(const char *json,
+									 const char *key,
+									 char *out,
+									 size_t out_size)
+{
+	if(json == NULL || key == NULL || out == NULL || out_size == 0) {
+		return false;
+	}
+
+	out[0] = '\0';
+
+	char pattern[32] = {0};
+	int pattern_len = snprintf(pattern, sizeof(pattern), "\"%s\"", key);
+	if(pattern_len <= 0 || (size_t)pattern_len >= sizeof(pattern)) {
+		return false;
+	}
+
+	const char *p = strstr(json, pattern);
+	if(p == NULL) {
+		return false;
+	}
+
+	p += pattern_len;
+	while(*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
+		p++;
+	}
+	if(*p != ':') {
+		return false;
+	}
+	p++;
+	while(*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
+		p++;
+	}
+	if(*p != '"') {
+		return false;
+	}
+	p++;
+
+	size_t out_len = 0;
+	while(*p != '\0' && *p != '"') {
+		char c = *p++;
+		if(c == '\\' && *p != '\0') {
+			char esc = *p++;
+			switch(esc) {
+				case '"':
+				case '\\':
+				case '/':
+					c = esc;
+					break;
+				case 'n':
+					c = '\n';
+					break;
+				case 'r':
+					c = '\r';
+					break;
+				case 't':
+					c = '\t';
+					break;
+				default:
+					c = esc;
+					break;
+			}
+		}
+
+		if(out_len + 1 < out_size) {
+			out[out_len++] = c;
+		}
+	}
+
+	out[out_len] = '\0';
+	return *p == '"';
+}
+
+static void ws_actor_handle_cw_payload(const char *json)
+{
+	ws_cw_record_t record = {0};
+
+	if(!ws_actor_json_get_string(json, "code", record.code, sizeof(record.code))) {
+		return;
+	}
+
+	(void)ws_actor_json_get_string(json, "room", record.room, sizeof(record.room));
+	(void)ws_actor_json_get_string(json, "room_name", record.room_name, sizeof(record.room_name));
+	(void)ws_actor_json_get_string(json, "callsign", record.callsign, sizeof(record.callsign));
+	(void)ws_actor_json_get_string(json, "from", record.from, sizeof(record.from));
+	(void)ws_actor_json_get_string(json, "sender_id", record.sender_id, sizeof(record.sender_id));
+	(void)ws_actor_json_get_string(json, "date", record.date, sizeof(record.date));
+	(void)ws_actor_json_get_string(json, "time", record.time, sizeof(record.time));
+	(void)ws_actor_json_get_string(json, "role", record.role, sizeof(record.role));
+	record.level = 0;
+
+	uint32_t seq = 0;
+	if(ws_cw_cache_add(&record, &seq) != ESP_OK) {
+		return;
+	}
+
+	// LOG("ws cw received: seq=%lu from=%s callsign=%s room=%s code=%s time=%s",
+	// 	(unsigned long)seq,
+	// 	record.from,
+	// 	record.callsign,
+	// 	record.room,
+	// 	record.code,
+	// 	record.time);
+
+	(void)msg_send_sys_value(MSG_SRC_WS, MSG_EVT_SYS_WS_CW_RECEIVED, (int)seq, 0);
+}
+
+static void ws_actor_handle_ws_data(const ws_client_event_t *event)
+{
+	if(event == NULL || event->binary) {
+		return;
+	}
+
+	char *json = ws_actor_copy_ws_payload(event);
+	if(json == NULL) {
+		return;
+	}
+
+	char type[16] = {0};
+	if(ws_actor_json_get_string(json, "type", type, sizeof(type)) && strcmp(type, "cw") == 0) {
+		ws_actor_handle_cw_payload(json);
+	}
+
+	free(json);
+}
+
+static void ws_actor_poll_heartbeat(void)
+{
+	if(s_actor.state != WS_ACTOR_STATE_CONNECTED) {
+		return;
+	}
+
+	if(ws_actor_tick_reached(xTaskGetTickCount(), s_actor.next_heartbeat_tick)) {
+		ws_actor_send_heartbeat();
+	}
+}
+
 static void ws_actor_client_event_cb(const ws_client_event_t *event, void *user_ctx)
 {
 	(void)user_ctx;
@@ -253,6 +563,9 @@ static void ws_actor_client_event_cb(const ws_client_event_t *event, void *user_
 		case WS_CLIENT_EVT_DISCONNECTED:
 		case WS_CLIENT_EVT_ERROR:
 			(void)msg_send_sys_value(MSG_SRC_WS, MSG_EVT_SYS_WS_DISCONNECTED, 0, 0);
+			break;
+		case WS_CLIENT_EVT_DATA:
+			ws_actor_handle_ws_data(event);
 			break;
 		default:
 			break;
@@ -275,6 +588,7 @@ static void ws_actor_apply_msg(const msg_t *msg)
 		case MSG_EVT_SYS_WIFI_STOPPING:
 			s_actor.wifi_connected = false;
 			s_actor.reconnect_delay_ms = 0;
+			s_actor.next_heartbeat_tick = 0;
 			esp_err_t deinit_err = ws_client_deinit();
 			s_actor.active_url[0] = '\0';
 			ws_actor_set_state(WS_ACTOR_STATE_WAIT_WIFI);
@@ -290,6 +604,7 @@ static void ws_actor_apply_msg(const msg_t *msg)
 
 		case MSG_EVT_SYS_WIFI_DISCONNECTED:
 			s_actor.wifi_connected = false;
+			s_actor.next_heartbeat_tick = 0;
 			(void)ws_client_stop();
 			ws_actor_set_state(WS_ACTOR_STATE_WAIT_WIFI);
 			break;
@@ -303,6 +618,7 @@ static void ws_actor_apply_msg(const msg_t *msg)
 				s_actor.reconnect_delay_ms = 0;
 				(void)ws_actor_connect();
 			} else {
+				s_actor.next_heartbeat_tick = 0;
 				(void)ws_client_stop();
 				ws_actor_set_state(WS_ACTOR_STATE_IDLE);
 			}
@@ -310,16 +626,23 @@ static void ws_actor_apply_msg(const msg_t *msg)
 
 		case MSG_EVT_CMD_WS_RECONNECT:
 			s_actor.reconnect_delay_ms = 0;
+			s_actor.next_heartbeat_tick = 0;
 			(void)ws_client_stop();
 			(void)ws_actor_connect();
 			break;
 
+		case MSG_EVT_CMD_WS_SEND_CW:
+			ws_actor_send_cw();
+			break;
+
 		case MSG_EVT_SYS_WS_CONNECTED:
 			s_actor.reconnect_delay_ms = 0;
+			ws_actor_schedule_heartbeat();
 			ws_actor_set_state(WS_ACTOR_STATE_CONNECTED);
 			break;
 
 		case MSG_EVT_SYS_WS_DISCONNECTED:
+			s_actor.next_heartbeat_tick = 0;
 			if(s_actor.state != WS_ACTOR_STATE_WAIT_WIFI && app_settings.ws_enable) {
 				ws_actor_schedule_reconnect();
 			}
@@ -344,6 +667,8 @@ static void ws_actor_task(void *arg)
 		   ws_actor_tick_reached(xTaskGetTickCount(), s_actor.next_reconnect_tick)) {
 			(void)ws_actor_connect();
 		}
+
+		ws_actor_poll_heartbeat();
 
 		vTaskDelay(WS_ACTOR_POLL_TICKS);
 	}

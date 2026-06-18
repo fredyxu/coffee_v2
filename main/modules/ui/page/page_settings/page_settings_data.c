@@ -6,6 +6,11 @@ static const settings_item_t s_settings_items[] = {
         .title = "返回",
         .subtitle = "回到主界面",
     },
+	{
+        .id = SETTINGS_ITEM_ID_USER,
+        .title = "用户信息",
+        .subtitle = "用户信息",
+    },
     {
         .id = SETTINGS_ITEM_ID_WIFI,
         .title = "WiFi",
@@ -20,6 +25,11 @@ static const settings_item_t s_settings_items[] = {
         .id = SETTINGS_ITEM_ID_KEY,
         .title = "电键",
         .subtitle = "设置电报码输入方式",
+    },
+    {
+        .id = SETTINGS_ITEM_ID_MORSE,
+        .title = "摩尔斯电码",
+        .subtitle = "电码显示与发送设置",
     },
     {
         .id = SETTINGS_ITEM_ID_AUDIO,
