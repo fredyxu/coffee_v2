@@ -350,6 +350,21 @@ static const char *cw_keyer_decode_group(void)
     return NULL;
 }
 
+static const char *cw_keyer_decode_code(const char *code)
+{
+    if(code == NULL || code[0] == '\0') {
+        return NULL;
+    }
+
+    for(size_t i = 0; i < sizeof(s_cw_decode_table) / sizeof(s_cw_decode_table[0]); i++) {
+        if(strcmp(code, s_cw_decode_table[i].code) == 0) {
+            return s_cw_decode_table[i].text;
+        }
+    }
+
+    return NULL;
+}
+
 static void cw_keyer_clear_last_group(void)
 {
     s_keyer.last_group[0] = '\0';
@@ -823,4 +838,91 @@ const char *cw_keyer_actor_get_raw_text(void)
 const char *cw_keyer_actor_get_display_text(void)
 {
     return s_keyer.display_text != NULL ? s_keyer.display_text : "";
+}
+
+size_t cw_keyer_actor_render_display_text(const char *raw_text, char *out, size_t out_size)
+{
+    if(out == NULL || out_size == 0) {
+        return 0;
+    }
+
+    out[0] = '\0';
+    if(raw_text == NULL || raw_text[0] == '\0') {
+        return 0;
+    }
+
+    if(!app_settings.cw_decode_display_enable) {
+        (void)snprintf(out, out_size, "%s", raw_text);
+        return strlen(out);
+    }
+
+    size_t out_len = 0;
+    char group[CW_KEYER_GROUP_MAX] = {0};
+    size_t group_len = 0;
+    bool group_overflow = false;
+
+    for(const char *p = raw_text; *p != '\0';) {
+        const char *symbol = NULL;
+        size_t symbol_len = 0;
+
+        if(strncmp(p, "·", strlen("·")) == 0) {
+            symbol = "·";
+            symbol_len = strlen("·");
+        } else if(*p == '-') {
+            symbol = "-";
+            symbol_len = 1;
+        } else if(*p == ' ') {
+            if(group_len > 0) {
+                const char *decoded = group_overflow ? NULL : cw_keyer_decode_code(group);
+                const char *text = decoded != NULL ? decoded : "*";
+                size_t text_len = strlen(text);
+                if(out_len + text_len < out_size) {
+                    memcpy(out + out_len, text, text_len);
+                    out_len += text_len;
+                    out[out_len] = '\0';
+                }
+                group[0] = '\0';
+                group_len = 0;
+                group_overflow = false;
+            }
+            if(out_len + 1 < out_size) {
+                out[out_len++] = ' ';
+                out[out_len] = '\0';
+            }
+            p++;
+            continue;
+        } else {
+            p++;
+            continue;
+        }
+
+        if(out_len + symbol_len < out_size) {
+            memcpy(out + out_len, symbol, symbol_len);
+            out_len += symbol_len;
+            out[out_len] = '\0';
+        }
+
+        if(group_len + symbol_len < sizeof(group)) {
+            memcpy(group + group_len, symbol, symbol_len);
+            group_len += symbol_len;
+            group[group_len] = '\0';
+        } else {
+            group_overflow = true;
+        }
+
+        p += symbol_len;
+    }
+
+    if(group_len > 0) {
+        const char *decoded = group_overflow ? NULL : cw_keyer_decode_code(group);
+        const char *text = decoded != NULL ? decoded : "*";
+        size_t text_len = strlen(text);
+        if(out_len + text_len < out_size) {
+            memcpy(out + out_len, text, text_len);
+            out_len += text_len;
+            out[out_len] = '\0';
+        }
+    }
+
+    return out_len;
 }

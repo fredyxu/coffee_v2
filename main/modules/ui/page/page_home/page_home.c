@@ -70,6 +70,7 @@ typedef struct {
 	const char *code;
 	const char *from;
 	const char *time;
+	char rendered_code[320];
 } home_msg_view_t;
 
 typedef enum {
@@ -318,7 +319,8 @@ static void add_msg(const home_msg_view_t *msg)
 
 	lv_obj_t *context_label = lv_label_create(context_body);
 	lv_obj_add_style(context_label, &s_style_m_context_label, LV_STATE_DEFAULT);
-	message_label_set_text(context_label, msg->code);
+	const char *display_code = msg->rendered_code[0] != '\0' ? msg->rendered_code : msg->code;
+	message_label_set_text(context_label, display_code);
 }
 
 static void page_home_scroll_msg_bottom(void)
@@ -358,12 +360,14 @@ static void page_home_add_record(const ws_cw_record_t *record, bool scroll_to_bo
 		return;
 	}
 
-	add_msg(&(home_msg_view_t) {
+	home_msg_view_t view = {
 		.callsign = record->callsign,
 		.code = record->code,
 		.from = record->from,
 		.time = record->time,
-	});
+	};
+	(void)cw_keyer_actor_render_display_text(record->code, view.rendered_code, sizeof(view.rendered_code));
+	add_msg(&view);
 
 	if(scroll_to_bottom) {
 		page_home_scroll_msg_bottom();
