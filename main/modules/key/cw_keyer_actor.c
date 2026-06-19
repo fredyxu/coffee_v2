@@ -335,6 +335,41 @@ static bool cw_keyer_should_accept_symbol(const char *symbol)
     return true;
 }
 
+static size_t cw_keyer_code_len(const char *text)
+{
+    size_t len = 0;
+    const char *p = text;
+    while(p != NULL && *p != '\0') {
+        if(strncmp(p, "·", strlen("·")) == 0) {
+            len++;
+            p += strlen("·");
+        } else if(*p == '-' || *p == ' ') {
+            len++;
+            p++;
+        } else {
+            p++;
+        }
+    }
+
+    return len;
+}
+
+static bool cw_keyer_can_append_code(const char *text)
+{
+    if(text == NULL || text[0] == '\0') {
+        return true;
+    }
+
+    return cw_keyer_code_len(s_keyer.raw_text) + cw_keyer_code_len(text) <= KEY_CODE_MAX_LEN;
+}
+
+static bool cw_keyer_raw_ends_with_space(void)
+{
+    return s_keyer.raw_len > 0 &&
+           s_keyer.raw_text != NULL &&
+           s_keyer.raw_text[s_keyer.raw_len - 1] == ' ';
+}
+
 static const char *cw_keyer_decode_group(void)
 {
     if(s_keyer.last_group_len == 0 || s_keyer.last_group_overflow) {
@@ -550,14 +585,29 @@ static void cw_keyer_delete_last_group(void)
 
 static void cw_keyer_restore_last_group(void)
 {
-    cw_keyer_deleted_group_t group = {0};
-    if(!cw_keyer_pop_deleted_group(&group) || group.text[0] == '\0') {
+    if(s_keyer.deleted_group_count == 0) {
         return;
     }
 
-    if(s_keyer.raw_len > 0 &&
-       s_keyer.raw_text != NULL &&
-       s_keyer.raw_text[s_keyer.raw_len - 1] != ' ') {
+    cw_keyer_deleted_group_t group = s_keyer.deleted_groups[s_keyer.deleted_group_count - 1];
+    if(group.text[0] == '\0') {
+        return;
+    }
+
+    size_t restore_len = cw_keyer_code_len(group.text);
+    if(s_keyer.raw_len > 0 && !cw_keyer_raw_ends_with_space()) {
+        restore_len++;
+    }
+    if(group.had_trailing_space) {
+        restore_len++;
+    }
+    if(cw_keyer_code_len(s_keyer.raw_text) + restore_len > KEY_CODE_MAX_LEN) {
+        return;
+    }
+
+    (void)cw_keyer_pop_deleted_group(&group);
+
+    if(s_keyer.raw_len > 0 && !cw_keyer_raw_ends_with_space()) {
         if(!cw_keyer_append_to_buffer(&s_keyer.raw_text, &s_keyer.raw_len, &s_keyer.raw_cap, " ")) {
             return;
         }
@@ -581,6 +631,10 @@ static void cw_keyer_restore_last_group(void)
 static void cw_keyer_append_raw_symbol(const char *symbol)
 {
     if(!cw_keyer_should_accept_symbol(symbol)) {
+        return;
+    }
+
+    if(!cw_keyer_can_append_code(symbol)) {
         return;
     }
 

@@ -28,8 +28,8 @@
 /* 侧音。 */
 #define KEY_DEFAULT_TONE_HZ 700
 
-/* 电码文本缓冲区。msg_t.data.text 当前为 64 字节。 */
-#define KEY_CODE_MAX_LEN 64
+/* 电码原始文本最大长度，按用户看到的电码字符计数：·、-、空格各算 1 个。 */
+#define KEY_CODE_MAX_LEN 256
 
 #define KEY_GROUP_GAP_RATIO 3.0f
 #define KEY_AUTO_DI_FALLBACK_RATIO 0.7f
