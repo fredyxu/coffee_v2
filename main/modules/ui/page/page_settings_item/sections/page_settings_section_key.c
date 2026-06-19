@@ -233,7 +233,7 @@ static settings_sub_item_t s_key_sub_items[] = {
     {
         .id = SETTINGS_SUB_ITEM_ID_KEY_MANUAL_DI_MS,
         .value_type = SETTINGS_VALUE_TYPE_INT,
-        .title = "手动点时长",
+        .title = "手动键点时长",
         .value = &app_settings.key_manual_di_ms,
         .min_value = 40,
         .max_value = 300,
@@ -244,7 +244,7 @@ static settings_sub_item_t s_key_sub_items[] = {
     {
         .id = SETTINGS_SUB_ITEM_ID_KEY_MANUAL_ADAPTIVE_ENABLE,
         .value_type = SETTINGS_VALUE_TYPE_BOOL,
-        .title = "手动自适应",
+        .title = "手动键时长自适应",
         .value = &app_settings.key_manual_adaptive_enable,
         .has_setting_id = true,
         .setting_id = APP_SETTING_ID_KEY_MANUAL_ADAPTIVE_ENABLE,
@@ -252,7 +252,7 @@ static settings_sub_item_t s_key_sub_items[] = {
     {
         .id = SETTINGS_SUB_ITEM_ID_KEY_AUTO_DI_MS,
         .value_type = SETTINGS_VALUE_TYPE_INT,
-        .title = "自动点时长",
+        .title = "自动键点时长",
         .value = &app_settings.key_auto_di_ms,
         .min_value = 40,
         .max_value = 300,
@@ -263,7 +263,7 @@ static settings_sub_item_t s_key_sub_items[] = {
     {
         .id = SETTINGS_SUB_ITEM_ID_KEY_AUTO_DA_RATIO,
         .value_type = SETTINGS_VALUE_TYPE_INT,
-        .title = "自动划倍数",
+        .title = "自动键划时长倍数",
         .value = &s_key_auto_da_ratio_x10,
         .min_value = 10,
         .max_value = 50,
@@ -274,7 +274,7 @@ static settings_sub_item_t s_key_sub_items[] = {
     {
         .id = SETTINGS_SUB_ITEM_ID_KEY_AUTO_GAP_RATIO,
         .value_type = SETTINGS_VALUE_TYPE_INT,
-        .title = "自动间隔倍数",
+        .title = "自动键连发间隔倍数",
         .value = &s_key_auto_gap_ratio_x10,
         .min_value = 3,
         .max_value = 10,
