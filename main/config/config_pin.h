@@ -131,11 +131,11 @@ GPIO 40+:
  * 🔮 预留扩展
  * ============================================================ */
 
-#define PIN_AUDIO_PA_EN            -1
+// #define PIN_AUDIO_PA_EN            -1
 
-#define PIN_SD_MOSI                -1
-#define PIN_SD_MISO                -1
-#define PIN_SD_CLK                 -1
-#define PIN_SD_CS                  -1
+// #define PIN_SD_MOSI                -1
+// #define PIN_SD_MISO                -1
+// #define PIN_SD_CLK                 -1
+// #define PIN_SD_CS                  -1
 
-#define PIN_STATUS_LED             -1
+// #define PIN_STATUS_LED             -1
