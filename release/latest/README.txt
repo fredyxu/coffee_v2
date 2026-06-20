@@ -1,4 +1,11 @@
-Firmware package exported by ./fw
+ZClub Coffee Firmware
+
+Version: latest
+Firmware Version: v0.1.0-gdd285d8-dirty
+Commit: dd285d8
+Dirty Worktree: 1
+Build Time UTC: 2026-06-20T01:22:58Z
+Target: ESP32-S3
 
 Files:
 - coffee.bin

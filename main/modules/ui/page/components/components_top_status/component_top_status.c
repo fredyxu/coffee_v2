@@ -216,7 +216,8 @@ esp_err_t ui_add_top_status(lv_obj_t *p)
 
 	lv_obj_t *label_settings = lv_label_create(obj_settings_body);
 	lv_obj_add_style(label_settings, &style_icon_label, 0);
-	lv_label_set_text(label_settings, ICON_SETTINGS);
+	// lv_label_set_text(label_settings, ICON_SETTINGS);
+	lv_label_set_text(label_settings, ICON_MENU);
 	lv_obj_center(label_settings);
 	lv_obj_remove_flag(label_settings, LV_OBJ_FLAG_CLICKABLE);
 	lv_obj_add_flag(label_settings, LV_OBJ_FLAG_EVENT_BUBBLE);
