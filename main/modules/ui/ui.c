@@ -12,6 +12,7 @@
 #include "modules/ui/page/page_home/page_home.h"
 #include "modules/ui/page/page_settings/page_settings.h"
 #include "modules/ui/page/page_settings_item/page_settings_item.h"
+#include "modules/ui/page/page_menu/page_menu.h"
 #include "modules/ui/ui_actor.h"
 
 
@@ -82,6 +83,8 @@ static esp_err_t page_show(ui_page_nav_param_t param) {
     case PAGE_SETTINGS:
 		page_settings_show(screen);
         break;
+	case PAGE_MENU:
+		page_menu_show(screen);
     default:
         return ESP_ERR_NOT_SUPPORTED;
     }
@@ -97,7 +100,7 @@ static void ui_create(void *arg)
 	ui_style_init();
 	ui_screen_init();
 	ui_nav_go((ui_page_nav_param_t) {
-		.page_id = PAGE_HOME,
+		.page_id = PAGE_INIT,
 	});
 	// ui_nav_go((ui_page_nav_param_t) {
 	// 	.page_id = PAGE_SETTINGS_ITEM,
