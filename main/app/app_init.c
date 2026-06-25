@@ -12,6 +12,7 @@
 #include "modules/key/cw_keyer_actor.h"
 #include "modules/key/key_actor.h"
 #include "modules/mic/mic_actor.h"
+#include "modules/intercom/intercom_actor.h"
 #include "modules/wifi/wifi_actor.h"
 #include "modules/ws/ws_actor.h"
 #include "modules/display/lcd_i80_8.h"
@@ -98,6 +99,14 @@ esp_err_t app_startup(void) {
 		return err;
 	}
 	app_init_report_info("WebSocket初始化完成.");
+
+	// 初始化对讲 Actor
+	err = intercom_actor_init();
+	if(err != ESP_OK) {
+		LOG("APP_INIT: intercom actor init failed");
+		return err;
+	}
+	app_init_report_info("对讲初始化完成.");
 
 	// 初始化旋转编码器
 	err = encoder_actor_init();

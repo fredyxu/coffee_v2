@@ -144,6 +144,7 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
         case MSG_EVT_INPUT_ENCODER_CCW:
         case MSG_EVT_INPUT_ENCODER_PRESS:
         case MSG_EVT_INPUT_ENCODER_LONG_PRESS:
+        case MSG_EVT_INPUT_ENCODER_RELEASE:
             *out_topic = MSG_TOPIC_ENCODER_INPUT;
             return ESP_OK;
 
@@ -205,7 +206,14 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
         case MSG_EVT_CMD_WS_SET_ENABLE:
         case MSG_EVT_CMD_WS_RECONNECT:
         case MSG_EVT_CMD_WS_SEND_CW:
+        case MSG_EVT_CMD_WS_INTERCOM_TALK_START:
+        case MSG_EVT_CMD_WS_INTERCOM_TALK_STOP:
             *out_topic = MSG_TOPIC_WEBSOCKET_CMD;
+            return ESP_OK;
+
+        case MSG_EVT_CMD_INTERCOM_TALK_START_REQ:
+        case MSG_EVT_CMD_INTERCOM_TALK_STOP:
+            *out_topic = MSG_TOPIC_INTERCOM_CMD;
             return ESP_OK;
 
         case MSG_EVT_SYS_WIFI_CONNECTED:
@@ -224,6 +232,11 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
         case MSG_EVT_SYS_WS_HEARTBEAT_LOST:
         case MSG_EVT_SYS_WS_CW_RECEIVED:
             *out_topic = MSG_TOPIC_WEBSOCKET_EVENT;
+            return ESP_OK;
+
+        case MSG_EVT_SYS_INTERCOM_TALK_START_ACK:
+        case MSG_EVT_SYS_INTERCOM_SPEAKER_CHANGED:
+            *out_topic = MSG_TOPIC_INTERCOM_EVENT;
             return ESP_OK;
 
         case MSG_EVT_SYS_APP_INIT_INFO:

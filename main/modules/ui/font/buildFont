@@ -6,11 +6,16 @@ FONT_SRC="$ROOT/font/font.otf"
 CHARS_FILE="$ROOT/font/chars.txt"
 OUT_DIR="$ROOT/font"
 ICONFONT_DIR="$ROOT/font/iconfont"
+MENUICON_DIR="$ROOT/font/menu_icon"
 ICON_MAP_FILE="$ROOT/font/icon_map.txt"
+MENU_ICON_MAP_FILE="$ROOT/font/menu_icon_map.txt"
 ICON_HEADER="$ROOT/theme/font_icons.h"
+MENU_ICON_HEADER="$ROOT/theme/font_menu.h"
 ICON_SYMBOLS_FILE="$ROOT/font/icon_symbols.txt"
 ALL_SYMBOLS_FILE="$ROOT/font/all_symbols.txt"
 ICON_ENTRIES_FILE="$ROOT/font/icon_font_entries.txt"
+MENU_ICON_ENTRIES_FILE="$ROOT/font/menu_icon_entries.txt"
+MENU_ICON_SIZE=32
 
 if [ ! -f "$FONT_SRC" ]; then
   echo "font file not found: $FONT_SRC" >&2
@@ -28,7 +33,7 @@ else
   TAGS=("$@")
 fi
 
-mkdir -p "$ICONFONT_DIR"
+mkdir -p "$ICONFONT_DIR" "$MENUICON_DIR"
 
 python3 - "$ICONFONT_DIR" "$ICON_MAP_FILE" "$ICON_HEADER" "$ICON_SYMBOLS_FILE" "$ICON_ENTRIES_FILE" <<'PY'
 from pathlib import Path
@@ -256,6 +261,208 @@ for p in sorted(file_to_entry.keys()):
 entries_file.write_text("\n".join(entry_lines) + ("\n" if entry_lines else ""), encoding="utf-8")
 PY
 
+python3 - "$MENUICON_DIR" "$MENU_ICON_MAP_FILE" "$MENU_ICON_HEADER" "$MENU_ICON_ENTRIES_FILE" <<'PY'
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+menuicon_dir = Path(sys.argv[1])
+map_file = Path(sys.argv[2])
+header_file = Path(sys.argv[3])
+entries_file = Path(sys.argv[4])
+
+allowed_ext = {".ttf", ".otf", ".woff", ".woff2"}
+font_files = sorted([p for p in menuicon_dir.iterdir() if p.is_file() and p.suffix.lower() in allowed_ext])
+
+existing = {}
+if map_file.exists():
+    for line in map_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if key and value.lower().startswith("0x"):
+            try:
+                existing[key] = int(value, 16)
+            except ValueError:
+                pass
+
+def next_free_codepoint(used, preferred_start=0xEA00):
+    for cp in range(preferred_start, 0xF8FF + 1):
+        if cp not in used:
+            return cp
+    raise SystemExit("no free private-use codepoint available for menu icon fonts")
+
+def normalize_suffix(stem: str) -> str:
+    name = re.sub(r"[^a-zA-Z0-9]+", "_", stem.strip())
+    name = re.sub(r"_+", "_", name).strip("_")
+    if not name:
+        name = "UNKNOWN"
+    if name[0].isdigit():
+        name = f"_{name}"
+    return name
+
+def normalize_macro(stem: str) -> str:
+    return f"ICON_MENU_{normalize_suffix(stem).upper()}"
+
+def parse_code_from_stem(stem: str):
+    m = re.search(r"(?:_u|_0x)([0-9a-fA-F]{4,6})$", stem)
+    if not m:
+        return None
+    return int(m.group(1), 16)
+
+def parse_code_file(path: Path):
+    code_file = path.with_suffix(".code")
+    if not code_file.exists():
+        return None
+    text = code_file.read_text(encoding="utf-8").strip()
+    if not text:
+        return None
+    text = text.upper()
+    if text.startswith("0X"):
+        text = text[2:]
+    if not re.fullmatch(r"[0-9A-F]{4,6}", text):
+        raise SystemExit(f"invalid code in {code_file.name}: {text}")
+    return int(text, 16)
+
+def parse_charset_tokens(charset_text: str):
+    cps = []
+    for token in charset_text.split():
+        token = token.strip().lower()
+        if not token:
+            continue
+        if "-" in token:
+            a, b = token.split("-", 1)
+            try:
+                start = int(a, 16)
+                end = int(b, 16)
+            except ValueError:
+                continue
+            if end < start:
+                start, end = end, start
+            cps.extend(range(start, end + 1))
+        else:
+            try:
+                cps.append(int(token, 16))
+            except ValueError:
+                continue
+    return cps
+
+def scan_font_codepoints(path: Path):
+    try:
+        out = subprocess.check_output(
+            ["fc-scan", "--format", "%{charset}\\n", str(path)],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return []
+    return sorted(set(parse_charset_tokens(out.strip())))
+
+mapping = {}
+file_to_entry = {}
+errors = []
+used_codes = set()
+code_owner = {}
+
+for f in font_files:
+    icon_macro = normalize_macro(f.stem)
+
+    cps = scan_font_codepoints(f)
+    pua = [cp for cp in cps if 0xE000 <= cp <= 0xF8FF]
+    non_ascii = [cp for cp in cps if cp > 0x7F]
+    if len(pua) == 1:
+        source_code = pua[0]
+    elif len(pua) == 0 and len(non_ascii) == 1:
+        source_code = non_ascii[0]
+    else:
+        if len(pua) > 1:
+            sample = " ".join(f"0x{cp:04X}" for cp in pua[:8])
+            errors.append(
+                f"ambiguous unicode for {f.name}; multiple PUA codepoints found ({sample}). "
+                f"please keep a single glyph codepoint in the menu icon font"
+            )
+        else:
+            errors.append(
+                f"missing unicode for {f.name}; menu icon font must expose one non-ASCII glyph codepoint"
+            )
+        continue
+
+    target_code = None
+    explicit_target = False
+    explicit = parse_code_file(f)
+    if explicit is None:
+        explicit = parse_code_from_stem(f.stem)
+    if explicit is not None:
+        target_code = explicit
+        explicit_target = True
+    elif icon_macro in existing:
+        target_code = existing[icon_macro]
+    else:
+        target_code = next_free_codepoint(used_codes)
+
+    if target_code in used_codes:
+        owner = code_owner.get(target_code)
+        replacement = next_free_codepoint(used_codes)
+        level = "WARN" if explicit_target else "INFO"
+        print(
+            f"[buildFont] {level}: {icon_macro} target 0x{target_code:04X} collides"
+            f"{f' with {owner}' if owner else ''}; auto-remap output to 0x{replacement:04X}",
+            file=sys.stderr,
+        )
+        target_code = replacement
+
+    if source_code != target_code:
+        print(
+            f"[buildFont] INFO: {icon_macro} remap {f.name} glyph "
+            f"0x{source_code:04X} -> 0x{target_code:04X}",
+            file=sys.stderr,
+        )
+
+    mapping[icon_macro] = {
+        "target": target_code,
+    }
+    file_to_entry[str(f.resolve())] = (source_code, target_code, icon_macro)
+    used_codes.add(target_code)
+    code_owner[target_code] = icon_macro
+
+if errors:
+    for e in errors:
+        print(f"[buildFont] ERROR: {e}", file=sys.stderr)
+    raise SystemExit(1)
+
+map_lines = ["# Auto-generated by buildFont", "# ICON_MENU_NAME=0xCODEPOINT"]
+for key in sorted(mapping.keys()):
+    map_lines.append(f"{key}=0x{mapping[key]['target']:04X}")
+map_file.write_text("\n".join(map_lines) + "\n", encoding="utf-8")
+
+header_lines = [
+    "#pragma once",
+    "",
+    '#include "lvgl.h"',
+    "",
+    "/* Auto-generated by main/modules/ui/font/buildFont */",
+    "extern const lv_font_t font_menu_icon;",
+    "#define FONT_MENU_ICON (&font_menu_icon)",
+]
+for key in sorted(mapping.keys()):
+    header_lines.append(f'#define {key} "\\u{mapping[key]["target"]:04X}"')
+if not mapping:
+    header_lines.append("/* no menu icon fonts found in main/modules/ui/font/menu_icon */")
+header_lines.append("")
+header_file.parent.mkdir(parents=True, exist_ok=True)
+header_file.write_text("\n".join(header_lines), encoding="utf-8")
+
+entry_lines = []
+for p in sorted(file_to_entry.keys()):
+    source_code, target_code, icon_macro = file_to_entry[p]
+    entry_lines.append(f"{p}\t0x{source_code:04X}\t0x{target_code:04X}\t{icon_macro}")
+entries_file.write_text("\n".join(entry_lines) + ("\n" if entry_lines else ""), encoding="utf-8")
+PY
+
 cat "$CHARS_FILE" "$ICON_SYMBOLS_FILE" | tr -d '\n' > "$ALL_SYMBOLS_FILE"
 SYMBOLS=$(cat "$ALL_SYMBOLS_FILE")
 
@@ -319,5 +526,36 @@ for SIZE in "${TAGS[@]}"; do
   "${cmd[@]}"
   cleanup_font "$OUT"
 done
+
+find "$OUT_DIR" -maxdepth 1 -name 'font_menu_*.c' ! -name 'font_menu_icon.c' -delete
+
+if [ -s "$MENU_ICON_ENTRIES_FILE" ]; then
+  OUT="$OUT_DIR/font_menu_icon.c"
+  echo "building menu icon font size $MENU_ICON_SIZE -> $OUT"
+
+  cmd=(lv_font_conv
+    --size "$MENU_ICON_SIZE"
+    --bpp 4
+    --format lvgl
+    --no-compress
+    --output "$OUT"
+  )
+
+  while IFS=$'\t' read -r p source_code target_code icon_macro; do
+    [ -z "${p:-}" ] && continue
+    [ -z "${source_code:-}" ] && continue
+    [ -z "${target_code:-}" ] && target_code="$source_code"
+
+    cmd+=(--font "$p")
+    if [ "$source_code" = "$target_code" ]; then
+      cmd+=(--range "${target_code}-${target_code}")
+    else
+      cmd+=(--range "${source_code}=>${target_code}")
+    fi
+  done < "$MENU_ICON_ENTRIES_FILE"
+
+  "${cmd[@]}"
+  cleanup_font "$OUT"
+fi
 
 echo "font build complete"

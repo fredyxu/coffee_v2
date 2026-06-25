@@ -126,7 +126,7 @@ static void init_style(void)
 }
 
 static void settings_clicked_cb(lv_event_t *e) {
-	if(ui_get_current_page() == PAGE_SETTINGS) {
+	if(ui_get_current_page() == PAGE_MENU) {
 		return;
 	}
 
@@ -135,7 +135,7 @@ static void settings_clicked_cb(lv_event_t *e) {
 	}
 
 	ui_nav_go((ui_page_nav_param_t) {
-        .page_id = PAGE_SETTINGS,
+        .page_id = PAGE_MENU,
     });
 
     lv_indev_t *indev = lv_indev_active();

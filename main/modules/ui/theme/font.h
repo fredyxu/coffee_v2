@@ -12,3 +12,4 @@ extern const lv_font_t font_16;
 
 // 图标
 #include "ui/theme/font_icons.h"
+#include "ui/theme/font_menu.h"

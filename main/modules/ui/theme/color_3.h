@@ -58,3 +58,13 @@
 
 #define UI_COLOR_KEYBOARD_PRESSED_BG	lv_color_hex(0x38BDF8)
 #define UI_COLOR_KEYBOARD_PRESSED_TEXT	lv_color_hex(0x0D1117)
+
+
+// 已按下，等待服务器确认
+#define UI_COLOR_PTT_PENDING   lv_color_hex(0xE05252)  // 红色
+
+// 已允许，正在讲话
+#define UI_COLOR_PTT_GERRN   lv_color_hex(0x3FA96B)  // 绿色
+
+// 不可用/离线/频道占用，可选
+#define UI_COLOR_DISABLED  lv_color_hex(0x8A8F98)  // 灰色

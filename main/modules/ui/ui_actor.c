@@ -107,6 +107,7 @@ static esp_err_t ui_actor_subscribe(void)
         MSG_TOPIC_ENCODER_INPUT,
         MSG_TOPIC_WIFI_EVENT,
         MSG_TOPIC_WEBSOCKET_EVENT,
+        MSG_TOPIC_INTERCOM_EVENT,
         MSG_TOPIC_APP_INIT_EVENT,
         MSG_TOPIC_CW_OUTPUT,
     };

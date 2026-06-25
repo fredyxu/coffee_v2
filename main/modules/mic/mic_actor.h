@@ -3,13 +3,14 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "esp_err.h"
+#include "config/config_sys.h"
 #include "freertos/FreeRTOS.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define MIC_ACTOR_FRAME_MAX_SAMPLES 320
+#define MIC_ACTOR_FRAME_MAX_SAMPLES INTERCOM_AUDIO_FRAME_SAMPLES
 
 typedef struct {
     uint32_t sample_rate;

@@ -7,8 +7,10 @@
 #include "driver/ledc.h"
 #include "esp_lcd_panel_io.h"
 #include "modules/ui/page/page_settings/page_settings_data.h"
+#include "config/config_sys_display.h"
+#include "config/config_ui.h"
 
-
+#define PAGE_MAIN_HEIGHT (DISPLAY_V_RES - CONFIG_UI_TOP_STATUS_HEIGHT)
 
 
 typedef enum {
@@ -17,6 +19,10 @@ typedef enum {
     PAGE_MENU,
     PAGE_SETTINGS,
 	PAGE_SETTINGS_ITEM,
+	PAGE_DUIJIANG,
+	PAGE_ABOUT,
+	PAGE_LIANXI,
+	PAGE_TALK,
 	PAGE_NONE,
 } ui_page_id_t;
 

@@ -16,6 +16,9 @@ typedef struct {
     uint8_t bits_per_sample;
     i2s_chan_handle_t rx_chan;
     SemaphoreHandle_t lock;
+    StaticSemaphore_t lock_buf;
+    uint32_t raw_read_timeout_count;
+    uint32_t raw_read_error_count;
 } mic_ctx_t;
 
 static mic_ctx_t s_mic = {0};
@@ -73,12 +76,14 @@ esp_err_t mic_init(const mic_config_t *cfg)
         return ESP_ERR_INVALID_ARG;
     }
 
-    s_mic.lock = xSemaphoreCreateMutex();
+    s_mic.lock = xSemaphoreCreateMutexStatic(&s_mic.lock_buf);
     if(s_mic.lock == NULL) {
         return ESP_ERR_NO_MEM;
     }
 
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(MIC_I2S_PORT, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num = MIC_I2S_DMA_DESC_NUM;
+    chan_cfg.dma_frame_num = MIC_I2S_DMA_FRAME_NUM;
     chan_cfg.auto_clear = true;
 
     esp_err_t err = i2s_new_channel(&chan_cfg, NULL, &s_mic.rx_chan);
@@ -90,7 +95,7 @@ esp_err_t mic_init(const mic_config_t *cfg)
 
     i2s_std_config_t std_cfg = {
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(cfg->sample_rate),
-        .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(bit_width, I2S_SLOT_MODE_MONO),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(bit_width, I2S_SLOT_MODE_STEREO),
         .gpio_cfg = {
             .mclk = I2S_GPIO_UNUSED,
             .bclk = cfg->bclk_io,
@@ -105,28 +110,33 @@ esp_err_t mic_init(const mic_config_t *cfg)
         },
     };
 
-    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
+    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_RIGHT;
+    LOG("mic i2s init: port=%d bclk=%d ws=%d din=%d sr=%u bits=%u mode=philips-stereo-right",
+        MIC_I2S_PORT,
+        cfg->bclk_io,
+        cfg->ws_io,
+        cfg->din_io,
+        (unsigned)cfg->sample_rate,
+        (unsigned)cfg->bits_per_sample);
 
     err = i2s_channel_init_std_mode(s_mic.rx_chan, &std_cfg);
     if(err != ESP_OK) {
+        LOG("mic i2s std init failed: %s", esp_err_to_name(err));
         return err;
     }
 
     err = i2s_channel_enable(s_mic.rx_chan);
     if(err != ESP_OK) {
+        LOG("mic i2s enable failed: %s", esp_err_to_name(err));
         return err;
     }
 
     s_mic.sample_rate = cfg->sample_rate;
     s_mic.bits_per_sample = cfg->bits_per_sample;
+    s_mic.raw_read_timeout_count = 0;
+    s_mic.raw_read_error_count = 0;
     s_mic.inited = true;
 
-    // LOG("mic init done (bclk=%d ws=%d din=%d sr=%u bps=%u)",
-        // cfg->bclk_io,
-        // cfg->ws_io,
-        // cfg->din_io,
-        // (unsigned)cfg->sample_rate,
-        // (unsigned)cfg->bits_per_sample);
     return ESP_OK;
 }
 
@@ -198,13 +208,31 @@ esp_err_t mic_read_raw(void *buf, size_t bytes, size_t *out_bytes, TickType_t ti
         *out_bytes = read_bytes;
     }
 
+    if(err == ESP_ERR_TIMEOUT) {
+        s_mic.raw_read_timeout_count++;
+        if(s_mic.raw_read_timeout_count <= 5 || (s_mic.raw_read_timeout_count % 50U) == 0U ||
+           read_bytes > 0) {
+            LOG("mic raw read timeout: requested=%u got=%u count=%u",
+                (unsigned)bytes,
+                (unsigned)read_bytes,
+                (unsigned)s_mic.raw_read_timeout_count);
+        }
+    } else if(err != ESP_OK) {
+        s_mic.raw_read_error_count++;
+        LOG("mic raw read failed: err=%s requested=%u got=%u count=%u",
+            esp_err_to_name(err),
+            (unsigned)bytes,
+            (unsigned)read_bytes,
+            (unsigned)s_mic.raw_read_error_count);
+    }
+
     mic_lock_give();
     return err;
 }
 
 static int16_t mic_s32_to_s16(int32_t v)
 {
-    v >>= 14;
+    v >>= 17;
     if(v > INT16_MAX) v = INT16_MAX;
     if(v < INT16_MIN) v = INT16_MIN;
     return (int16_t)v;

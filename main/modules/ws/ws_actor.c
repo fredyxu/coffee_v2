@@ -5,12 +5,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "app/app_settings.h"
 #include "config/config_sys.h"
 #include "core/msg/msg.h"
 #include "core/msg/msg_sub.h"
 #include "core/utils/log.h"
+#include "apps/esp_sntp.h"
 #include "esp_mac.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -23,10 +25,21 @@
 #define WS_FINAL_URL_MAX 256
 #define WS_DEVICE_ID_MAX 32
 #define WS_ACTOR_POLL_TICKS pdMS_TO_TICKS(200)
+#define WS_TIME_SYNC_TIMEOUT_TICKS pdMS_TO_TICKS(15000)
+#define WS_MIN_TLS_UNIX_TIME 1767225600
+
+#define WS_INTERCOM_AUDIO_MAGIC_0 'C'
+#define WS_INTERCOM_AUDIO_MAGIC_1 'A'
+#define WS_INTERCOM_AUDIO_VERSION 1
+#define WS_INTERCOM_AUDIO_CODEC_PCM16 0
+#define WS_INTERCOM_AUDIO_CODEC_G711_ULAW 1
+#define WS_INTERCOM_AUDIO_FRAME_PACKET_BYTES (sizeof(ws_intercom_audio_header_t) + INTERCOM_AUDIO_FRAME_BYTES)
+#define WS_INTERCOM_AUDIO_BATCH_FRAMES INTERCOM_AUDIO_WS_BATCH_FRAMES
 
 typedef enum {
 	WS_ACTOR_STATE_IDLE = 0,
 	WS_ACTOR_STATE_WAIT_WIFI,
+	WS_ACTOR_STATE_WAIT_TIME,
 	WS_ACTOR_STATE_CONNECTING,
 	WS_ACTOR_STATE_CONNECTED,
 	WS_ACTOR_STATE_BACKOFF,
@@ -42,17 +55,73 @@ typedef struct {
 	uint32_t reconnect_delay_ms;
 	TickType_t next_reconnect_tick;
 	TickType_t next_heartbeat_tick;
+	TickType_t time_sync_deadline_tick;
+	bool time_synced_once;
 	char active_url[WS_FINAL_URL_MAX];
 	TaskHandle_t wifi_stop_waiter;
 	esp_err_t wifi_stop_result;
+	uint32_t audio_send_consecutive_failures;
 } ws_actor_ctx_t;
+
+typedef struct __attribute__((packed)) {
+	uint8_t magic[2];
+	uint8_t version;
+	uint8_t codec;
+	uint16_t seq;
+	uint16_t samples;
+	uint32_t sample_rate;
+} ws_intercom_audio_header_t;
 
 static ws_actor_ctx_t s_actor = {
 	.sub_handle = MSG_SUB_HANDLE_INVALID,
 };
+static uint8_t s_intercom_audio_tx_batch[WS_INTERCOM_AUDIO_FRAME_PACKET_BYTES * WS_INTERCOM_AUDIO_BATCH_FRAMES];
+static size_t s_intercom_audio_tx_batch_count;
 static portMUX_TYPE s_wifi_stop_wait_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static void ws_actor_client_event_cb(const ws_client_event_t *event, void *user_ctx);
+
+static uint8_t ws_actor_pcm16_to_ulaw(int16_t sample)
+{
+	const uint16_t bias = 0x84;
+	const int16_t clip = 32635;
+	uint8_t sign = 0;
+	int32_t pcm = sample;
+
+	if(pcm < 0) {
+		pcm = -pcm;
+		sign = 0x80;
+	}
+	if(pcm > clip) {
+		pcm = clip;
+	}
+	pcm += bias;
+
+	uint8_t exponent = 7;
+	for(uint16_t mask = 0x4000; exponent > 0 && (pcm & mask) == 0; mask >>= 1) {
+		exponent--;
+	}
+	uint8_t mantissa = (uint8_t)((pcm >> (exponent + 3)) & 0x0F);
+	return (uint8_t)(~(sign | (exponent << 4) | mantissa));
+}
+
+static size_t ws_actor_encode_intercom_payload(uint8_t *dst, const int16_t *samples, size_t sample_count)
+{
+	if(dst == NULL || samples == NULL) {
+		return 0;
+	}
+
+#if INTERCOM_AUDIO_CODEC == INTERCOM_AUDIO_CODEC_G711_ULAW
+	for(size_t i = 0; i < sample_count; i++) {
+		dst[i] = ws_actor_pcm16_to_ulaw(samples[i]);
+	}
+	return sample_count;
+#else
+	size_t payload_bytes = sample_count * sizeof(int16_t);
+	memcpy(dst, samples, payload_bytes);
+	return payload_bytes;
+#endif
+}
 
 static void ws_actor_set_state(ws_actor_state_t state)
 {
@@ -60,7 +129,6 @@ static void ws_actor_set_state(ws_actor_state_t state)
 		return;
 	}
 
-	// LOG("ws state: %s -> %s", ws_actor_state_name(s_actor.state), ws_actor_state_name(state));
 	s_actor.state = state;
 }
 
@@ -92,6 +160,56 @@ static void ws_actor_schedule_reconnect(void)
 static void ws_actor_schedule_heartbeat(void)
 {
 	s_actor.next_heartbeat_tick = xTaskGetTickCount() + pdMS_TO_TICKS(WS_HEARTBEAT_INTERVAL_MS);
+}
+
+static bool ws_actor_ready_for_intercom_audio(void)
+{
+	return app_settings.ws_enable &&
+		   s_actor.wifi_connected &&
+		   wifi_module_is_connected() &&
+		   ws_client_is_connected();
+}
+
+static void ws_actor_start_sntp(void)
+{
+	if(esp_sntp_enabled()) {
+		return;
+	}
+
+	esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+	esp_sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
+	esp_sntp_setservername(0, "ntp.aliyun.com");
+#if CONFIG_LWIP_SNTP_MAX_SERVERS > 1
+	esp_sntp_setservername(1, "time.cloudflare.com");
+#endif
+#if CONFIG_LWIP_SNTP_MAX_SERVERS > 2
+	esp_sntp_setservername(2, "pool.ntp.org");
+#endif
+	esp_sntp_init();
+}
+
+static bool ws_actor_time_ready(void)
+{
+	time_t now = 0;
+	time(&now);
+	sntp_sync_status_t status = sntp_get_sync_status();
+
+	if(status == SNTP_SYNC_STATUS_COMPLETED) {
+		s_actor.time_synced_once = true;
+	}
+
+	if(now >= WS_MIN_TLS_UNIX_TIME) {
+		s_actor.time_synced_once = true;
+	}
+
+	return s_actor.time_synced_once;
+}
+
+static void ws_actor_wait_time_sync(void)
+{
+	ws_actor_start_sntp();
+	s_actor.time_sync_deadline_tick = xTaskGetTickCount() + WS_TIME_SYNC_TIMEOUT_TICKS;
+	ws_actor_set_state(WS_ACTOR_STATE_WAIT_TIME);
 }
 
 static void ws_actor_make_device_id(char *buf, size_t buf_size)
@@ -214,6 +332,11 @@ static esp_err_t ws_actor_connect(void)
 		return ESP_ERR_INVALID_STATE;
 	}
 
+	if(!ws_actor_time_ready()) {
+		ws_actor_wait_time_sync();
+		return ESP_ERR_INVALID_STATE;
+	}
+
 	char url[WS_FINAL_URL_MAX] = {0};
 	esp_err_t err = ws_actor_build_url(url, sizeof(url));
 	if(err != ESP_OK) {
@@ -244,6 +367,8 @@ static esp_err_t ws_actor_connect(void)
 	err = ws_client_start();
 	if(err != ESP_OK) {
 		LOG("ws client start failed: %s", esp_err_to_name(err));
+		(void)ws_client_deinit();
+		s_actor.active_url[0] = '\0';
 		ws_actor_schedule_reconnect();
 		return err;
 	}
@@ -308,6 +433,56 @@ static void ws_actor_json_escape(const char *src, char *dst)
 		}
 	}
 	dst[out] = '\0';
+}
+
+static void ws_actor_send_intercom_signal(const char *type)
+{
+	if(type == NULL || !app_settings.ws_enable || !s_actor.wifi_connected ||
+	   !wifi_module_is_connected() || !ws_client_is_connected()) {
+		return;
+	}
+
+	const char *room = app_settings.ws_room[0] != '\0' ? app_settings.ws_room : "default";
+	const char *callsign = app_settings.user_callsign;
+
+	size_t type_len = ws_actor_json_escaped_len(type);
+	size_t room_len = ws_actor_json_escaped_len(room);
+	size_t callsign_len = ws_actor_json_escaped_len(callsign);
+	size_t json_size = type_len + room_len + callsign_len + 64;
+
+	char *json = (char *)malloc(json_size);
+	char *type_esc = (char *)malloc(type_len + 1);
+	char *room_esc = (char *)malloc(room_len + 1);
+	char *callsign_esc = (char *)malloc(callsign_len + 1);
+	if(json == NULL || type_esc == NULL || room_esc == NULL || callsign_esc == NULL) {
+		free(json);
+		free(type_esc);
+		free(room_esc);
+		free(callsign_esc);
+		return;
+	}
+
+	ws_actor_json_escape(type, type_esc);
+	ws_actor_json_escape(room, room_esc);
+	ws_actor_json_escape(callsign, callsign_esc);
+
+	int written = snprintf(
+		json,
+		json_size,
+		"{\"type\":\"%s\",\"room\":\"%s\",\"callsign\":\"%s\"}",
+		type_esc,
+		room_esc,
+		callsign_esc
+	);
+
+	if(written > 0 && (size_t)written < json_size && ws_client_send_text(json) == ESP_OK) {
+		ws_actor_schedule_heartbeat();
+	}
+
+	free(json);
+	free(type_esc);
+	free(room_esc);
+	free(callsign_esc);
 }
 
 static void ws_actor_send_cw(void)
@@ -485,6 +660,47 @@ static bool ws_actor_json_get_string(const char *json,
 	return *p == '"';
 }
 
+static bool ws_actor_json_get_bool(const char *json, const char *key, bool *out)
+{
+	if(json == NULL || key == NULL || out == NULL) {
+		return false;
+	}
+
+	char pattern[32] = {0};
+	int pattern_len = snprintf(pattern, sizeof(pattern), "\"%s\"", key);
+	if(pattern_len <= 0 || (size_t)pattern_len >= sizeof(pattern)) {
+		return false;
+	}
+
+	const char *p = strstr(json, pattern);
+	if(p == NULL) {
+		return false;
+	}
+
+	p += pattern_len;
+	while(*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
+		p++;
+	}
+	if(*p != ':') {
+		return false;
+	}
+	p++;
+	while(*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n') {
+		p++;
+	}
+
+	if(strncmp(p, "true", 4) == 0) {
+		*out = true;
+		return true;
+	}
+	if(strncmp(p, "false", 5) == 0) {
+		*out = false;
+		return true;
+	}
+
+	return false;
+}
+
 static void ws_actor_handle_cw_payload(const char *json)
 {
 	ws_cw_record_t record = {0};
@@ -508,15 +724,38 @@ static void ws_actor_handle_cw_payload(const char *json)
 		return;
 	}
 
-	// LOG("ws cw received: seq=%lu from=%s callsign=%s room=%s code=%s time=%s",
-	// 	(unsigned long)seq,
-	// 	record.from,
-	// 	record.callsign,
-	// 	record.room,
-	// 	record.code,
-	// 	record.time);
-
 	(void)msg_send_sys_value(MSG_SRC_WS, MSG_EVT_SYS_WS_CW_RECEIVED, (int)seq, 0);
+}
+
+static void ws_actor_handle_intercom_talk_ack(const char *json)
+{
+	bool ok = false;
+	if(!ws_actor_json_get_bool(json, "ok", &ok)) {
+		return;
+	}
+
+	(void)msg_send_sys_value(
+		MSG_SRC_WS,
+		MSG_EVT_SYS_INTERCOM_TALK_START_ACK,
+		ok ? 1 : 0,
+		0
+	);
+}
+
+static void ws_actor_handle_intercom_talking(const char *json)
+{
+	bool talking = false;
+	char callsign[sizeof(app_settings.user_callsign)] = {0};
+
+	(void)ws_actor_json_get_bool(json, "talking", &talking);
+	(void)ws_actor_json_get_string(json, "callsign", callsign, sizeof(callsign));
+
+	(void)msg_send_sys_text(
+		MSG_SRC_WS,
+		MSG_EVT_SYS_INTERCOM_SPEAKER_CHANGED,
+		talking ? callsign : "",
+		0
+	);
 }
 
 static void ws_actor_handle_ws_data(const ws_client_event_t *event)
@@ -530,9 +769,13 @@ static void ws_actor_handle_ws_data(const ws_client_event_t *event)
 		return;
 	}
 
-	char type[16] = {0};
+	char type[32] = {0};
 	if(ws_actor_json_get_string(json, "type", type, sizeof(type)) && strcmp(type, "cw") == 0) {
 		ws_actor_handle_cw_payload(json);
+	} else if(strcmp(type, "intercom_talk_start_ack") == 0) {
+		ws_actor_handle_intercom_talk_ack(json);
+	} else if(strcmp(type, "intercom_talking") == 0) {
+		ws_actor_handle_intercom_talking(json);
 	}
 
 	free(json);
@@ -547,6 +790,63 @@ static void ws_actor_poll_heartbeat(void)
 	if(ws_actor_tick_reached(xTaskGetTickCount(), s_actor.next_heartbeat_tick)) {
 		ws_actor_send_heartbeat();
 	}
+}
+
+static void ws_actor_poll_time_sync(void)
+{
+	if(s_actor.state != WS_ACTOR_STATE_WAIT_TIME) {
+		return;
+	}
+
+	if(!s_actor.wifi_connected && !wifi_module_is_connected()) {
+		ws_actor_set_state(WS_ACTOR_STATE_WAIT_WIFI);
+		return;
+	}
+
+	if(ws_actor_time_ready()) {
+		s_actor.reconnect_delay_ms = 0;
+		(void)ws_actor_connect();
+		return;
+	}
+
+	if(ws_actor_tick_reached(xTaskGetTickCount(), s_actor.time_sync_deadline_tick)) {
+		LOG("ws wait time sync timeout");
+		ws_actor_schedule_reconnect();
+	}
+}
+
+static esp_err_t ws_actor_send_intercom_audio_batch(const uint8_t *packet, size_t packet_bytes)
+{
+	if(packet == NULL || packet_bytes == 0) {
+		return ESP_OK;
+	}
+
+	if(!ws_actor_ready_for_intercom_audio()) {
+		return ESP_ERR_INVALID_STATE;
+	}
+
+	esp_err_t err = ws_client_send_binary_timeout(
+		packet,
+		(int)packet_bytes,
+		pdMS_TO_TICKS(WS_AUDIO_SEND_TIMEOUT_MS)
+	);
+	if(err == ESP_OK) {
+		s_actor.audio_send_consecutive_failures = 0;
+		ws_actor_schedule_heartbeat();
+		return ESP_OK;
+	}
+
+	s_actor.audio_send_consecutive_failures++;
+	LOG("ws intercom audio send failed: err=%s bytes=%u consecutive=%u/%u",
+		esp_err_to_name(err),
+		(unsigned)packet_bytes,
+		(unsigned)s_actor.audio_send_consecutive_failures,
+		(unsigned)WS_AUDIO_SEND_MAX_CONSECUTIVE_FAILS);
+	s_intercom_audio_tx_batch_count = 0;
+	if(s_actor.audio_send_consecutive_failures >= WS_AUDIO_SEND_MAX_CONSECUTIVE_FAILS) {
+		(void)msg_send_sys_value(MSG_SRC_WS, MSG_EVT_SYS_WS_DISCONNECTED, 0, 0);
+	}
+	return err;
 }
 
 static void ws_actor_client_event_cb(const ws_client_event_t *event, void *user_ctx)
@@ -589,6 +889,8 @@ static void ws_actor_apply_msg(const msg_t *msg)
 			s_actor.wifi_connected = false;
 			s_actor.reconnect_delay_ms = 0;
 			s_actor.next_heartbeat_tick = 0;
+			s_actor.time_sync_deadline_tick = 0;
+			s_intercom_audio_tx_batch_count = 0;
 			esp_err_t deinit_err = ws_client_deinit();
 			s_actor.active_url[0] = '\0';
 			ws_actor_set_state(WS_ACTOR_STATE_WAIT_WIFI);
@@ -605,6 +907,8 @@ static void ws_actor_apply_msg(const msg_t *msg)
 		case MSG_EVT_SYS_WIFI_DISCONNECTED:
 			s_actor.wifi_connected = false;
 			s_actor.next_heartbeat_tick = 0;
+			s_actor.time_sync_deadline_tick = 0;
+			s_intercom_audio_tx_batch_count = 0;
 			(void)ws_client_stop();
 			ws_actor_set_state(WS_ACTOR_STATE_WAIT_WIFI);
 			break;
@@ -619,6 +923,8 @@ static void ws_actor_apply_msg(const msg_t *msg)
 				(void)ws_actor_connect();
 			} else {
 				s_actor.next_heartbeat_tick = 0;
+				s_actor.time_sync_deadline_tick = 0;
+				s_intercom_audio_tx_batch_count = 0;
 				(void)ws_client_stop();
 				ws_actor_set_state(WS_ACTOR_STATE_IDLE);
 			}
@@ -627,6 +933,9 @@ static void ws_actor_apply_msg(const msg_t *msg)
 		case MSG_EVT_CMD_WS_RECONNECT:
 			s_actor.reconnect_delay_ms = 0;
 			s_actor.next_heartbeat_tick = 0;
+			s_actor.time_sync_deadline_tick = 0;
+			s_actor.audio_send_consecutive_failures = 0;
+			s_intercom_audio_tx_batch_count = 0;
 			(void)ws_client_stop();
 			(void)ws_actor_connect();
 			break;
@@ -635,14 +944,30 @@ static void ws_actor_apply_msg(const msg_t *msg)
 			ws_actor_send_cw();
 			break;
 
+		case MSG_EVT_CMD_WS_INTERCOM_TALK_START:
+			ws_actor_send_intercom_signal("intercom_talk_start");
+			break;
+
+		case MSG_EVT_CMD_WS_INTERCOM_TALK_STOP:
+			ws_actor_send_intercom_signal("intercom_talk_stop");
+			break;
+
 		case MSG_EVT_SYS_WS_CONNECTED:
 			s_actor.reconnect_delay_ms = 0;
+			s_actor.audio_send_consecutive_failures = 0;
 			ws_actor_schedule_heartbeat();
 			ws_actor_set_state(WS_ACTOR_STATE_CONNECTED);
 			break;
 
 		case MSG_EVT_SYS_WS_DISCONNECTED:
 			s_actor.next_heartbeat_tick = 0;
+			s_actor.audio_send_consecutive_failures = 0;
+			s_intercom_audio_tx_batch_count = 0;
+			if(s_actor.state == WS_ACTOR_STATE_BACKOFF || s_actor.state == WS_ACTOR_STATE_WAIT_WIFI) {
+				break;
+			}
+			(void)ws_client_deinit();
+			s_actor.active_url[0] = '\0';
 			if(s_actor.state != WS_ACTOR_STATE_WAIT_WIFI && app_settings.ws_enable) {
 				ws_actor_schedule_reconnect();
 			}
@@ -668,6 +993,7 @@ static void ws_actor_task(void *arg)
 			(void)ws_actor_connect();
 		}
 
+		ws_actor_poll_time_sync();
 		ws_actor_poll_heartbeat();
 
 		vTaskDelay(WS_ACTOR_POLL_TICKS);
@@ -697,6 +1023,8 @@ esp_err_t ws_actor_init(void)
 
 	err = ws_actor_subscribe();
 	if(err != ESP_OK) {
+		vQueueDelete(s_actor.queue);
+		s_actor.queue = NULL;
 		return err;
 	}
 
@@ -710,6 +1038,8 @@ esp_err_t ws_actor_init(void)
 		TASK_CORE_CON
 	);
 	if(ok != pdPASS) {
+		vQueueDelete(s_actor.queue);
+		s_actor.queue = NULL;
 		return ESP_FAIL;
 	}
 
@@ -769,6 +1099,65 @@ esp_err_t ws_actor_prepare_wifi_stop(TickType_t timeout_ticks)
 	}
 	portEXIT_CRITICAL(&s_wifi_stop_wait_mux);
 
+	return err;
+}
+
+esp_err_t ws_actor_send_intercom_audio_frame(const int16_t *samples,
+											 size_t sample_count,
+											 uint16_t seq,
+											 uint32_t sample_rate)
+{
+	if(samples == NULL || sample_count != INTERCOM_AUDIO_FRAME_SAMPLES) {
+		return ESP_ERR_INVALID_ARG;
+	}
+
+	if(!ws_actor_ready_for_intercom_audio()) {
+		s_intercom_audio_tx_batch_count = 0;
+		return ESP_ERR_INVALID_STATE;
+	}
+
+	if(seq == 0) {
+		s_intercom_audio_tx_batch_count = 0;
+	}
+
+	uint8_t *packet = s_intercom_audio_tx_batch +
+					  (s_intercom_audio_tx_batch_count * WS_INTERCOM_AUDIO_FRAME_PACKET_BYTES);
+	ws_intercom_audio_header_t *header = (ws_intercom_audio_header_t *)packet;
+	header->magic[0] = WS_INTERCOM_AUDIO_MAGIC_0;
+	header->magic[1] = WS_INTERCOM_AUDIO_MAGIC_1;
+	header->version = WS_INTERCOM_AUDIO_VERSION;
+#if INTERCOM_AUDIO_CODEC == INTERCOM_AUDIO_CODEC_G711_ULAW
+	header->codec = WS_INTERCOM_AUDIO_CODEC_G711_ULAW;
+#else
+	header->codec = WS_INTERCOM_AUDIO_CODEC_PCM16;
+#endif
+	header->seq = seq;
+	header->samples = (uint16_t)sample_count;
+	header->sample_rate = sample_rate;
+
+	(void)ws_actor_encode_intercom_payload(packet + sizeof(ws_intercom_audio_header_t), samples, sample_count);
+	s_intercom_audio_tx_batch_count++;
+	if(s_intercom_audio_tx_batch_count < WS_INTERCOM_AUDIO_BATCH_FRAMES) {
+		return ESP_OK;
+	}
+
+	return ws_actor_flush_intercom_audio();
+}
+
+esp_err_t ws_actor_flush_intercom_audio(void)
+{
+	if(s_intercom_audio_tx_batch_count == 0) {
+		return ESP_OK;
+	}
+
+	if(!ws_actor_ready_for_intercom_audio()) {
+		s_intercom_audio_tx_batch_count = 0;
+		return ESP_ERR_INVALID_STATE;
+	}
+
+	size_t packet_bytes = s_intercom_audio_tx_batch_count * WS_INTERCOM_AUDIO_FRAME_PACKET_BYTES;
+	esp_err_t err = ws_actor_send_intercom_audio_batch(s_intercom_audio_tx_batch, packet_bytes);
+	s_intercom_audio_tx_batch_count = 0;
 	return err;
 }
 

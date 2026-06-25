@@ -74,6 +74,30 @@ static audio_actor_ctx_t s_actor = {0};
 static int16_t s_tone_table[AUDIO_ACTOR_TONE_TABLE_SIZE];
 static bool s_tone_table_ready;
 
+static esp_err_t audio_actor_ensure_stream_queue(void)
+{
+    if(s_actor.stream_q != NULL) {
+        return ESP_OK;
+    }
+
+    s_actor.stream_q = xQueueCreate(AUDIO_ACTOR_STREAM_QUEUE_LEN, sizeof(audio_stream_chunk_t));
+    if(s_actor.stream_q == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    return ESP_OK;
+}
+
+static void audio_actor_delete_stream_queue(void)
+{
+    if(s_actor.stream_q == NULL) {
+        return;
+    }
+
+    vQueueDelete(s_actor.stream_q);
+    s_actor.stream_q = NULL;
+}
+
 static void audio_actor_init_tone_table(void)
 {
     if(s_tone_table_ready) {
@@ -326,20 +350,22 @@ static void audio_actor_task(void *arg)
                 }
                 break;
             case AUDIO_ACTOR_CMD_STREAM_START:
+                if(audio_actor_ensure_stream_queue() != ESP_OK) {
+                    s_actor.stream_mode = false;
+                    s_actor.stream_sample_rate = 0;
+                    break;
+                }
                 s_actor.stream_mode = true;
                 s_actor.stream_sample_rate = cmd.data.stream.sample_rate;
                 if(s_actor.stream_sample_rate != 0) {
                     (void)audio_set_sample_rate(s_actor.stream_sample_rate);
                 }
-                if(s_actor.stream_q) {
-                    (void)xQueueReset(s_actor.stream_q);
-                }
+                (void)xQueueReset(s_actor.stream_q);
                 break;
             case AUDIO_ACTOR_CMD_STREAM_STOP:
                 s_actor.stream_mode = false;
-                if(s_actor.stream_q) {
-                    (void)xQueueReset(s_actor.stream_q);
-                }
+                s_actor.stream_sample_rate = 0;
+                audio_actor_delete_stream_queue();
                 break;
             default:
                 break;
@@ -385,17 +411,6 @@ esp_err_t audio_actor_init(void)
         return err;
     }
 
-    s_actor.stream_q = xQueueCreate(AUDIO_ACTOR_STREAM_QUEUE_LEN, sizeof(audio_stream_chunk_t));
-    if(s_actor.stream_q == NULL) {
-        (void)msg_unsub(s_actor.sub_handle, NULL, 0);
-        vQueueDelete(s_actor.msg_q);
-        vQueueDelete(s_actor.cmd_q);
-        s_actor.sub_handle = MSG_SUB_HANDLE_INVALID;
-        s_actor.msg_q = NULL;
-        s_actor.cmd_q = NULL;
-        return ESP_ERR_NO_MEM;
-    }
-
     BaseType_t ok = xTaskCreatePinnedToCore(
         audio_actor_task,
         "audio_actor",
@@ -407,11 +422,9 @@ esp_err_t audio_actor_init(void)
     );
     if(ok != pdPASS) {
         (void)msg_unsub(s_actor.sub_handle, NULL, 0);
-        vQueueDelete(s_actor.stream_q);
         vQueueDelete(s_actor.msg_q);
         vQueueDelete(s_actor.cmd_q);
         s_actor.sub_handle = MSG_SUB_HANDLE_INVALID;
-        s_actor.stream_q = NULL;
         s_actor.msg_q = NULL;
         s_actor.cmd_q = NULL;
         return ESP_FAIL;

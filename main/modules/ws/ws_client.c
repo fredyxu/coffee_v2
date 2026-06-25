@@ -5,12 +5,20 @@
 #include "config/config_sys.h"
 #include "core/utils/log.h"
 #include "esp_crt_bundle.h"
+#include "esp_heap_caps.h"
 #include "esp_websocket_client.h"
+#include "freertos/semphr.h"
+
+#if WS_TLS_VERIFY_MODE == WS_TLS_VERIFY_MODE_INSECURE_DEV && !WS_TLS_INSECURE_DEV_ENABLED
+#error "WS_TLS_VERIFY_MODE_INSECURE_DEV requires WS_TLS_INSECURE_DEV_ENABLED=1"
+#endif
 
 static esp_websocket_client_handle_t s_client;
 static ws_client_event_cb_t s_event_cb;
 static void *s_event_user_ctx;
 static bool s_connected;
+static SemaphoreHandle_t s_send_lock;
+static StaticSemaphore_t s_send_lock_buf;
 
 static void ws_client_emit(ws_client_event_id_t id, const char *data, int data_len, bool binary)
 {
@@ -77,13 +85,33 @@ esp_err_t ws_client_init(const ws_client_config_t *cfg)
 
 	(void)ws_client_deinit();
 
+	if(s_send_lock == NULL) {
+		s_send_lock = xSemaphoreCreateMutexStatic(&s_send_lock_buf);
+		if(s_send_lock == NULL) {
+			return ESP_ERR_NO_MEM;
+		}
+	}
+
 	esp_websocket_client_config_t websocket_cfg = {
 		.uri = cfg->url,
 		.buffer_size = 1024,
-		.crt_bundle_attach = esp_crt_bundle_attach,
 		.disable_auto_reconnect = true,
-		.network_timeout_ms = 10000,
+		.network_timeout_ms = WS_NETWORK_TIMEOUT_MS,
 	};
+
+#if WS_TLS_VERIFY_MODE == WS_TLS_VERIFY_MODE_BUNDLE
+	websocket_cfg.crt_bundle_attach = esp_crt_bundle_attach;
+#elif WS_TLS_VERIFY_MODE == WS_TLS_VERIFY_MODE_CUSTOM_CA
+	if(WS_CUSTOM_CA_PEM == NULL || ((const char *)WS_CUSTOM_CA_PEM)[0] == '\0') {
+		LOG("ws custom CA selected but WS_CUSTOM_CA_PEM is empty");
+		return ESP_ERR_INVALID_ARG;
+	}
+	websocket_cfg.cert_pem = WS_CUSTOM_CA_PEM;
+#elif WS_TLS_VERIFY_MODE == WS_TLS_VERIFY_MODE_INSECURE_DEV
+	websocket_cfg.skip_cert_common_name_check = true;
+#else
+#error "invalid WS_TLS_VERIFY_MODE"
+#endif
 
 	s_client = esp_websocket_client_init(&websocket_cfg);
 	if(s_client == NULL) {
@@ -157,26 +185,57 @@ esp_err_t ws_client_send_text(const char *text)
 		return ESP_ERR_INVALID_STATE;
 	}
 
+	if(xSemaphoreTake(s_send_lock, pdMS_TO_TICKS(WS_SEND_TIMEOUT_MS)) != pdTRUE) {
+		return ESP_ERR_TIMEOUT;
+	}
+
 	int written = esp_websocket_client_send_text(
 		s_client,
 		text,
 		(int)strlen(text),
 		pdMS_TO_TICKS(WS_SEND_TIMEOUT_MS)
 	);
-	return written >= 0 ? ESP_OK : ESP_FAIL;
+	(void)xSemaphoreGive(s_send_lock);
+	if(written == (int)strlen(text)) {
+		return ESP_OK;
+	}
+	LOG("ws text send incomplete: written=%d len=%u",
+		written,
+		(unsigned)strlen(text));
+	return (written == 0) ? ESP_ERR_TIMEOUT : ESP_FAIL;
 }
 
 esp_err_t ws_client_send_binary(const void *data, int len)
 {
+	return ws_client_send_binary_timeout(data, len, pdMS_TO_TICKS(WS_SEND_TIMEOUT_MS));
+}
+
+esp_err_t ws_client_send_binary_timeout(const void *data, int len, TickType_t timeout_ticks)
+{
 	if(data == NULL || len <= 0 || !ws_client_is_connected()) {
 		return ESP_ERR_INVALID_STATE;
+	}
+
+	if(xSemaphoreTake(s_send_lock, timeout_ticks) != pdTRUE) {
+		return ESP_ERR_TIMEOUT;
 	}
 
 	int written = esp_websocket_client_send_bin(
 		s_client,
 		data,
 		len,
-		pdMS_TO_TICKS(WS_SEND_TIMEOUT_MS)
+		timeout_ticks
 	);
-	return written >= 0 ? ESP_OK : ESP_FAIL;
+	(void)xSemaphoreGive(s_send_lock);
+	if(written == len) {
+		return ESP_OK;
+	}
+	LOG("ws binary send incomplete: written=%d len=%d heap=%u min_heap=%u dma=%u min_dma=%u",
+		written,
+		len,
+		(unsigned)esp_get_free_heap_size(),
+		(unsigned)esp_get_minimum_free_heap_size(),
+		(unsigned)heap_caps_get_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL),
+		(unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+	return (written == 0) ? ESP_ERR_TIMEOUT : ESP_FAIL;
 }

@@ -14,12 +14,6 @@
 /* 约定值：1=Mono, 2=Stereo */
 #define SOUND_CHANNEL_FORMAT 1
 
-/* 麦克风采集参数 */
-#define MIC_SAMPLE_RATE 16000
-#define MIC_BITS_PER_SAMPLE 32
-/* 约定值：1=Mono, 2=Stereo */
-#define MIC_CHANNEL_FORMAT 1
-
 /* DMA 缓冲配置：提高可降低欠载概率，但增加 RAM 占用 */
 #define I2S_DMA_BUFFER_COUNT 6
 #define I2S_DMA_BUFFER_LEN 256
@@ -33,5 +27,9 @@
 /* 麦克风默认不随开机初始化；需要录音功能时再启动，避免挤占 TLS 握手内存。 */
 #define MIC_INIT_ON_STARTUP 0
 #define MIC_ACTOR_CMD_QUEUE_LEN 6
-#define MIC_ACTOR_FRAME_QUEUE_LEN 4
+#define MIC_ACTOR_FRAME_QUEUE_LEN 16
 #define MIC_ACTOR_TASK_STACK 4096
+
+/* 对讲 actor 任务配置。 */
+#define INTERCOM_ACTOR_QUEUE_LEN 8
+#define INTERCOM_ACTOR_TASK_STACK 5120

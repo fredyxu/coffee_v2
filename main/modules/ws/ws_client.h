@@ -3,6 +3,7 @@
 #include <stdbool.h>
 
 #include "esp_err.h"
+#include "freertos/FreeRTOS.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,6 +38,7 @@ esp_err_t ws_client_stop(void);
 bool ws_client_is_connected(void);
 esp_err_t ws_client_send_text(const char *text);
 esp_err_t ws_client_send_binary(const void *data, int len);
+esp_err_t ws_client_send_binary_timeout(const void *data, int len, TickType_t timeout_ticks);
 
 #ifdef __cplusplus
 }

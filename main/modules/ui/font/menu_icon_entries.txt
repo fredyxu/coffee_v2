@@ -1,0 +1,5 @@
+/Users/Fredy/code/zclub/coffee/main/modules/ui/font/menu_icon/duijiang.ttf	0xE900	0xEA00	ICON_MENU_DUIJIANG
+/Users/Fredy/code/zclub/coffee/main/modules/ui/font/menu_icon/guanyu.ttf	0xE901	0xEA01	ICON_MENU_GUANYU
+/Users/Fredy/code/zclub/coffee/main/modules/ui/font/menu_icon/lianxi.ttf	0xE902	0xEA02	ICON_MENU_LIANXI
+/Users/Fredy/code/zclub/coffee/main/modules/ui/font/menu_icon/shezhi.ttf	0xE903	0xEA03	ICON_MENU_SHEZHI
+/Users/Fredy/code/zclub/coffee/main/modules/ui/font/menu_icon/shouye.ttf	0xE904	0xEA04	ICON_MENU_SHOUYE

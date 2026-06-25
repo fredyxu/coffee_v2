@@ -97,6 +97,8 @@ static void encoder_process_sw(void)
     if(s_ctx.sw_pressed) {
         if(!s_ctx.sw_long_sent) {
             encoder_post_input_event(MSG_EVT_INPUT_ENCODER_PRESS);
+        } else {
+            encoder_post_input_event(MSG_EVT_INPUT_ENCODER_RELEASE);
         }
         s_ctx.sw_pressed = false;
         s_ctx.sw_long_sent = false;

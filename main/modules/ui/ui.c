@@ -14,6 +14,7 @@
 #include "modules/ui/page/page_settings_item/page_settings_item.h"
 #include "modules/ui/page/page_menu/page_menu.h"
 #include "modules/ui/ui_actor.h"
+#include "modules/ui/page/page_talk/page_talk.h"
 
 
 #define UI_ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
@@ -85,6 +86,10 @@ static esp_err_t page_show(ui_page_nav_param_t param) {
         break;
 	case PAGE_MENU:
 		page_menu_show(screen);
+		break;
+	case PAGE_TALK:
+		page_talk_show(screen);
+		break;
     default:
         return ESP_ERR_NOT_SUPPORTED;
     }

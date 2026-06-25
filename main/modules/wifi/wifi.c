@@ -31,6 +31,16 @@ typedef struct {
 static wifi_ctx_t s_wifi = {0};
 static wifi_ap_record_t s_scan_records[WIFI_MODULE_SCAN_MAX_APS];
 
+static void wifi_disable_power_save(void)
+{
+    esp_err_t err = esp_wifi_set_ps(WIFI_PS_NONE);
+    if(err != ESP_OK) {
+        LOG("wifi disable power save failed: %s", esp_err_to_name(err));
+        return;
+    }
+    LOG("wifi power save disabled");
+}
+
 static void wifi_emit_event_full(wifi_module_event_id_t id,
                                  int reason,
                                  int rssi,
@@ -143,6 +153,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 
         if(event_id == WIFI_EVENT_STA_CONNECTED) {
             s_wifi.connected = true;
+            wifi_disable_power_save();
 
             int rssi = 0;
             wifi_ap_record_t ap = {0};
@@ -325,7 +336,14 @@ esp_err_t wifi_module_start(void)
         return ESP_OK;
     }
 
-    return esp_wifi_start();
+    esp_err_t err = esp_wifi_start();
+    if(err != ESP_OK) {
+        return err;
+    }
+
+    wifi_disable_power_save();
+
+    return ESP_OK;
 }
 
 esp_err_t wifi_module_stop(void)

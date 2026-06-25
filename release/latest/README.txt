@@ -1,10 +1,10 @@
 ZClub Coffee Firmware
 
 Version: latest
-Firmware Version: v0.1.0-g5d485b0-dirty
-Commit: 5d485b0
+Firmware Version: v0.2.0-g01f7e24-dirty
+Commit: 01f7e24
 Dirty Worktree: 1
-Build Time UTC: 2026-06-20T06:22:44Z
+Build Time UTC: 2026-06-25T04:25:21Z
 Target: ESP32-S3
 
 Files:
