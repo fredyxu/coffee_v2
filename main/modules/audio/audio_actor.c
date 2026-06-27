@@ -1,10 +1,12 @@
 #include "audio_actor.h"
 
+#include <limits.h>
 #include <math.h>
 #include <string.h>
 
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "esp_heap_caps.h"
 #include "app/app_settings.h"
 #include "config/config_pin.h"
 #include "config/config_sys.h"
@@ -82,8 +84,21 @@ static esp_err_t audio_actor_ensure_stream_queue(void)
 
     s_actor.stream_q = xQueueCreate(AUDIO_ACTOR_STREAM_QUEUE_LEN, sizeof(audio_stream_chunk_t));
     if(s_actor.stream_q == NULL) {
+        LOG("audio stream queue alloc failed: queue_len=%u item=%u need=%u free=%u largest=%u",
+            (unsigned)AUDIO_ACTOR_STREAM_QUEUE_LEN,
+            (unsigned)sizeof(audio_stream_chunk_t),
+            (unsigned)(AUDIO_ACTOR_STREAM_QUEUE_LEN * sizeof(audio_stream_chunk_t)),
+            (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
+            (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
         return ESP_ERR_NO_MEM;
     }
+
+    // LOG("audio stream queue ready: queue_len=%u item=%u need=%u free=%u largest=%u",
+    //     (unsigned)AUDIO_ACTOR_STREAM_QUEUE_LEN,
+    //     (unsigned)sizeof(audio_stream_chunk_t),
+    //     (unsigned)(AUDIO_ACTOR_STREAM_QUEUE_LEN * sizeof(audio_stream_chunk_t)),
+    //     (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
+    //     (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
 
     return ESP_OK;
 }
@@ -360,7 +375,6 @@ static void audio_actor_task(void *arg)
                 if(s_actor.stream_sample_rate != 0) {
                     (void)audio_set_sample_rate(s_actor.stream_sample_rate);
                 }
-                (void)xQueueReset(s_actor.stream_q);
                 break;
             case AUDIO_ACTOR_CMD_STREAM_STOP:
                 s_actor.stream_mode = false;
@@ -527,6 +541,11 @@ esp_err_t audio_actor_stream_start(uint32_t sample_rate, TickType_t timeout_tick
     if(sample_rate == 0) {
         return ESP_ERR_INVALID_ARG;
     }
+    esp_err_t err = audio_actor_ensure_stream_queue();
+    if(err != ESP_OK) {
+        return err;
+    }
+    (void)xQueueReset(s_actor.stream_q);
 
     audio_actor_cmd_t cmd = {
         .type = AUDIO_ACTOR_CMD_STREAM_START,
@@ -555,7 +574,16 @@ esp_err_t audio_actor_stream_push(const int16_t *samples, size_t sample_count, u
         .sample_rate = sample_rate,
         .sample_count = sample_count,
     };
-    memcpy(chunk.samples, samples, sample_count * sizeof(int16_t));
+    uint8_t volume = audio_get_volume();
+    for(size_t i = 0; i < sample_count; i++) {
+        int32_t sample = ((int32_t)samples[i] * (int32_t)volume) / 100;
+        if(sample > INT16_MAX) {
+            sample = INT16_MAX;
+        } else if(sample < INT16_MIN) {
+            sample = INT16_MIN;
+        }
+        chunk.samples[i] = (int16_t)sample;
+    }
 
     return (xQueueSend(s_actor.stream_q, &chunk, timeout_ticks) == pdTRUE) ? ESP_OK : ESP_ERR_TIMEOUT;
 }

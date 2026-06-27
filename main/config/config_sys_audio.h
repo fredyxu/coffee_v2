@@ -21,7 +21,7 @@
 /* 音频 actor 队列 / 栈配置 */
 #define AUDIO_ACTOR_CMD_QUEUE_LEN 8
 #define AUDIO_ACTOR_MSG_QUEUE_LEN 8
-#define AUDIO_ACTOR_STREAM_QUEUE_LEN 4
+#define AUDIO_ACTOR_STREAM_QUEUE_LEN 16
 #define AUDIO_ACTOR_TASK_STACK 5120
 
 /* 麦克风默认不随开机初始化；需要录音功能时再启动，避免挤占 TLS 握手内存。 */
@@ -33,3 +33,7 @@
 /* 对讲 actor 任务配置。 */
 #define INTERCOM_ACTOR_QUEUE_LEN 8
 #define INTERCOM_ACTOR_TASK_STACK 5120
+
+/* 网络对讲接收播放：按 20ms 帧预缓存，降低 WebSocket 抖动导致的断续。 */
+#define INTERCOM_RX_PLAYBACK_PREBUFFER_FRAMES 5
+#define INTERCOM_RX_PLAYBACK_PUSH_TIMEOUT_MS 5

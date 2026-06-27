@@ -9,7 +9,9 @@
 extern "C" {
 #endif
 
-#define AUDIO_STREAM_CHUNK_MAX_SAMPLES 512
+/* Network intercom playback consumes 20 ms / 8 kHz chunks. Keep this small so
+ * the FreeRTOS stream queue does not require a large contiguous heap block. */
+#define AUDIO_STREAM_CHUNK_MAX_SAMPLES 160
 
 typedef struct {
     uint32_t sample_rate;

@@ -38,7 +38,7 @@ static void wifi_disable_power_save(void)
         LOG("wifi disable power save failed: %s", esp_err_to_name(err));
         return;
     }
-    LOG("wifi power save disabled");
+    // LOG("wifi power save disabled");
 }
 
 static void wifi_emit_event_full(wifi_module_event_id_t id,

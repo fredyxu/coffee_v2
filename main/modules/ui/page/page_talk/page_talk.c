@@ -612,12 +612,12 @@ static void page_talk_join_room(void)
 {
 	LOG("talk page enter intercom room: room=%s", s_current_room_id);
 	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_AUDIO_STOP, 1, 0);
-#if INTERCOM_ROOM_SYNC_ENABLE
 	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_INTERCOM_ROOM_JOIN, 1, 0);
+#if INTERCOM_ROOM_SYNC_ENABLE
 	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_ROOM_LIST_REQ, 1, 0);
 	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_ROOM_USERS_REQ, 1, 0);
 #else
-	LOG("talk page room join skipped: room sync disabled");
+	LOG("talk page room snapshots skipped: room sync disabled");
 #endif
 }
 
@@ -632,10 +632,10 @@ static void page_talk_leave_room(void)
 	}
 	ptt_is_pressed = false;
 	ptt_set_status(PTT_STATUS_IDLE);
-#if INTERCOM_ROOM_SYNC_ENABLE
 	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_INTERCOM_ROOM_LEAVE, 1, 0);
+#if INTERCOM_ROOM_SYNC_ENABLE
 #else
-	LOG("talk page room leave skipped: room sync disabled");
+	LOG("talk page room leave presence skipped: room sync disabled");
 #endif
 }
 
