@@ -52,14 +52,17 @@
 /* WebSocket 发送等待锁的最长时间。 */
 #define WS_SEND_TIMEOUT_MS 2000
 
-/* WebSocket 音频帧发送等待锁的最长时间。 */
-#define WS_AUDIO_SEND_TIMEOUT_MS 1000
+/* WebSocket 音频帧发送等待锁的最长时间。远程 WSS/TLS 链路需要更宽松的写入窗口。 */
+#define WS_AUDIO_SEND_TIMEOUT_MS 3000
 
 /* 连续音频发送失败达到该次数后，才认为 WebSocket 需要重连。 */
-#define WS_AUDIO_SEND_MAX_CONSECUTIVE_FAILS 3
+#define WS_AUDIO_SEND_MAX_CONSECUTIVE_FAILS 5
 
 /* WebSocket 连接阶段网络超时。 */
 #define WS_NETWORK_TIMEOUT_MS 5000
+
+/* WebSocket client 任务栈。需要承载 TLS 回调与少量 JSON 解析。 */
+#define WS_CLIENT_TASK_STACK 8192
 
 /* WebSocket actor 任务配置。 */
 #define WS_ACTOR_QUEUE_LEN 16

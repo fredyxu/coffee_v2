@@ -14,20 +14,20 @@
 /* 约定值：1=Mono, 2=Stereo */
 #define SOUND_CHANNEL_FORMAT 1
 
-/* DMA 缓冲配置：提高可降低欠载概率，但增加 RAM 占用 */
-#define I2S_DMA_BUFFER_COUNT 6
-#define I2S_DMA_BUFFER_LEN 256
+/* DMA 缓冲配置：保持对讲页可收听，同时控制播放链路 RAM 占用。 */
+#define I2S_DMA_BUFFER_COUNT 4
+#define I2S_DMA_BUFFER_LEN 192
 
 /* 音频 actor 队列 / 栈配置 */
 #define AUDIO_ACTOR_CMD_QUEUE_LEN 8
 #define AUDIO_ACTOR_MSG_QUEUE_LEN 8
-#define AUDIO_ACTOR_STREAM_QUEUE_LEN 8
+#define AUDIO_ACTOR_STREAM_QUEUE_LEN 4
 #define AUDIO_ACTOR_TASK_STACK 5120
 
 /* 麦克风默认不随开机初始化；需要录音功能时再启动，避免挤占 TLS 握手内存。 */
 #define MIC_INIT_ON_STARTUP 0
 #define MIC_ACTOR_CMD_QUEUE_LEN 6
-#define MIC_ACTOR_FRAME_QUEUE_LEN 16
+#define MIC_ACTOR_FRAME_QUEUE_LEN 8
 #define MIC_ACTOR_TASK_STACK 4096
 
 /* 对讲 actor 任务配置。 */

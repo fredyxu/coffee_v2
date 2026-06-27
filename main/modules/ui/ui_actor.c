@@ -159,6 +159,12 @@ esp_err_t ui_actor_init(void)
 void ui_actor_set_ops(const ui_page_ops_t *ops) {
 	s_page_ops = ops;
 }
+void ui_actor_leave_current_page(void) {
+	const ui_page_ops_t *ops = s_page_ops;
+	if(ops != NULL && ops->on_leave != NULL) {
+		ops->on_leave();
+	}
+}
 void ui_actor_clean_ops() {
 	s_page_ops = NULL;
 }

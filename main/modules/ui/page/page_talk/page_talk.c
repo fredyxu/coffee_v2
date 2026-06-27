@@ -11,14 +11,14 @@
 #include "modules/ui/ui.h"
 #include "modules/ui/ui_actor.h"
 #include "modules/ui/theme/font.h"
+#include "modules/ws/ws_room_cache.h"
 #include "core/msg/msg.h"
+#include "core/utils/log.h"
 
 
 #define PAGE_TALK_ROOM_WIDTH LV_PCT(40)
 #define PAGE_TALK_INFO_WIDTH LV_PCT(59)
 #define PAGE_TALK_PTT_READY_COLOR lv_color_hex(0x3FA96B)
-#define PAGE_TALK_ROOM_COUNT (sizeof(room_list) / sizeof(room_list[0]))
-#define PAGE_TALK_USER_COUNT (sizeof(user_list) / sizeof(user_list[0]))
 #define PAGE_TALK_LIST_SCROLL_STEP 24
 
 typedef enum {
@@ -37,27 +37,16 @@ typedef enum {
 	TALK_FOCUS_COUNT,
 } talk_focus_t;
 
-static room_type_t room_list[] = {
-	{
-		.room_id = "default",
-		.room_name = "大厅",
-		.user_qty = 0,
-	},
-};
-
-static user_type_t user_list[] = {0};
-
-static room_type_t current_room = {
-	.room_id = "default",
-	.room_name = "大厅",
-};
-
 static ptt_status_t ptt_status = PTT_STATUS_IDLE;
 static bool ptt_is_pressed = false;
 static talk_focus_t s_talk_focus = TALK_FOCUS_ROOM_LIST;
 static bool s_talk_focus_active = false;
 static int s_current_room_index = 0;
 static int s_room_focus_index = 0;
+static char s_current_room_id[ROOM_ID_MAX_LEN + 1] = "default";
+static char s_current_room_name[ROOM_NAME_MAX_LEN + 1] = "大厅";
+static bool s_room_refresh_deferred = false;
+static bool s_user_refresh_deferred = false;
 
 
 static bool style_init_done = false;
@@ -90,8 +79,9 @@ static lv_obj_t *obj_user_list;
 // PTT按钮
 static lv_obj_t *obj_ptt_body;
 static lv_obj_t *obj_ptt_label;
-static lv_obj_t *s_room_item_objs[PAGE_TALK_ROOM_COUNT];
+static lv_obj_t *s_room_item_objs[ROOM_LIST_MAX_COUNT];
 
+static void ptt_set_status(ptt_status_t status);
 
 static void style_init() {
 	if(style_init_done) {
@@ -251,9 +241,19 @@ static void talk_focus_apply(void)
 
 static void room_item_refresh_style(int index)
 {
-	if(index < 0 || index >= (int)PAGE_TALK_ROOM_COUNT) {
+#if !INTERCOM_ROOM_SYNC_ENABLE
+	if(index != 0) {
 		return;
 	}
+#else
+	size_t room_count = ws_room_cache_room_count();
+	if(room_count > ROOM_LIST_MAX_COUNT) {
+		room_count = ROOM_LIST_MAX_COUNT;
+	}
+	if(index < 0 || index >= (int)room_count) {
+		return;
+	}
+#endif
 
 	lv_obj_t *obj = s_room_item_objs[index];
 	if(obj == NULL) {
@@ -274,18 +274,43 @@ static void room_item_refresh_style(int index)
 
 static void room_refresh_all_styles(void)
 {
-	for(int i = 0; i < (int)PAGE_TALK_ROOM_COUNT; i++) {
+#if !INTERCOM_ROOM_SYNC_ENABLE
+	room_item_refresh_style(0);
+#else
+	size_t room_count = ws_room_cache_room_count();
+	if(room_count > ROOM_LIST_MAX_COUNT) {
+		room_count = ROOM_LIST_MAX_COUNT;
+	}
+	for(int i = 0; i < (int)room_count; i++) {
 		room_item_refresh_style(i);
 	}
+#endif
 }
 
 static void room_focus_move(int step)
 {
+#if !INTERCOM_ROOM_SYNC_ENABLE
+	(void)step;
+	s_room_focus_index = 0;
+	room_refresh_all_styles();
+	if(s_room_item_objs[0] != NULL) {
+		lv_obj_scroll_to_view(s_room_item_objs[0], LV_ANIM_ON);
+	}
+	return;
+#else
+	size_t room_count = ws_room_cache_room_count();
+	if(room_count == 0) {
+		return;
+	}
+	if(room_count > ROOM_LIST_MAX_COUNT) {
+		room_count = ROOM_LIST_MAX_COUNT;
+	}
+
 	int old = s_room_focus_index;
 	s_room_focus_index += step;
 	if(s_room_focus_index < 0) {
-		s_room_focus_index = (int)PAGE_TALK_ROOM_COUNT - 1;
-	} else if(s_room_focus_index >= (int)PAGE_TALK_ROOM_COUNT) {
+		s_room_focus_index = (int)room_count - 1;
+	} else if(s_room_focus_index >= (int)room_count) {
 		s_room_focus_index = 0;
 	}
 
@@ -295,11 +320,20 @@ static void room_focus_move(int step)
 	if(s_room_item_objs[s_room_focus_index] != NULL) {
 		lv_obj_scroll_to_view(s_room_item_objs[s_room_focus_index], LV_ANIM_ON);
 	}
+#endif
 }
 
 static void room_set_current(int index)
 {
-	if(index < 0 || index >= (int)PAGE_TALK_ROOM_COUNT) {
+#if !INTERCOM_ROOM_SYNC_ENABLE
+	(void)index;
+	s_current_room_index = 0;
+	s_room_focus_index = 0;
+	room_refresh_all_styles();
+	return;
+#else
+	ws_room_record_t room = {0};
+	if(index < 0 || !ws_room_cache_get_room((size_t)index, &room)) {
 		return;
 	}
 
@@ -315,18 +349,23 @@ static void room_set_current(int index)
 
 	s_current_room_index = index;
 	s_room_focus_index = index;
-	current_room = room_list[index];
+	strncpy(s_current_room_id, room.id, sizeof(s_current_room_id) - 1);
+	s_current_room_id[sizeof(s_current_room_id) - 1] = '\0';
+	strncpy(s_current_room_name, room.name, sizeof(s_current_room_name) - 1);
+	s_current_room_name[sizeof(s_current_room_name) - 1] = '\0';
 
 	(void)app_settings_update(&(app_settings_update_t) {
 		.id = APP_SETTING_ID_WS_ROOM,
-		.value.str = current_room.room_id,
+		.value.str = s_current_room_id,
 	});
 	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_RECONNECT, 1, 0);
+	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_ROOM_USERS_REQ, 1, 0);
 
 	room_refresh_all_styles();
 	if(s_room_item_objs[s_room_focus_index] != NULL) {
 		lv_obj_scroll_to_view(s_room_item_objs[s_room_focus_index], LV_ANIM_ON);
 	}
+#endif
 }
 
 static void room_item_clicked_cb(lv_event_t *e)
@@ -341,23 +380,107 @@ static void room_item_clicked_cb(lv_event_t *e)
 
 static void room_init_default(void)
 {
-	if(strcmp(app_settings.ws_room, room_list[0].room_id) != 0) {
+#if !INTERCOM_ROOM_SYNC_ENABLE
+	s_current_room_index = 0;
+	s_room_focus_index = 0;
+	strncpy(s_current_room_id, "default", sizeof(s_current_room_id) - 1);
+	s_current_room_id[sizeof(s_current_room_id) - 1] = '\0';
+	strncpy(s_current_room_name, "大厅", sizeof(s_current_room_name) - 1);
+	s_current_room_name[sizeof(s_current_room_name) - 1] = '\0';
+
+	if(strcmp(app_settings.ws_room, s_current_room_id) != 0) {
 		(void)app_settings_update(&(app_settings_update_t) {
 			.id = APP_SETTING_ID_WS_ROOM,
-			.value.str = room_list[0].room_id,
+			.value.str = s_current_room_id,
 		});
 		(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_RECONNECT, 1, 0);
 	}
+#else
+	const char *wanted = app_settings.ws_room[0] != '\0' ? app_settings.ws_room : "default";
+	ws_room_record_t room = {0};
+	size_t index = 0;
+	if(!ws_room_cache_find_room(wanted, &index, &room)) {
+		if(!ws_room_cache_get_room(0, &room)) {
+			strncpy(room.id, "default", sizeof(room.id) - 1);
+			strncpy(room.name, "大厅", sizeof(room.name) - 1);
+		}
+		index = 0;
+	}
 
-	s_current_room_index = 0;
-	s_room_focus_index = 0;
-	current_room = room_list[0];
+	s_current_room_index = (int)index;
+	s_room_focus_index = (int)index;
+	strncpy(s_current_room_id, room.id, sizeof(s_current_room_id) - 1);
+	s_current_room_id[sizeof(s_current_room_id) - 1] = '\0';
+	strncpy(s_current_room_name, room.name, sizeof(s_current_room_name) - 1);
+	s_current_room_name[sizeof(s_current_room_name) - 1] = '\0';
+
+	if(strcmp(app_settings.ws_room, s_current_room_id) != 0) {
+		(void)app_settings_update(&(app_settings_update_t) {
+			.id = APP_SETTING_ID_WS_ROOM,
+			.value.str = s_current_room_id,
+		});
+		(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_RECONNECT, 1, 0);
+	}
+#endif
 }
 
 static void update_room_list() {
+	if(obj_room_list == NULL) {
+		return;
+	}
+	lv_obj_clean(obj_room_list);
 	memset(s_room_item_objs, 0, sizeof(s_room_item_objs));
 
-	for(int i = 0; i < (int)PAGE_TALK_ROOM_COUNT; i ++ ) {
+#if !INTERCOM_ROOM_SYNC_ENABLE
+	LOG("talk page update room list: static default room current=%s", s_current_room_id);
+	lv_obj_t *item = lv_obj_create(obj_room_list);
+	lv_obj_add_style(item, &s_style_room_item_body, LV_STATE_DEFAULT);
+	lv_obj_add_flag(item, LV_OBJ_FLAG_CLICKABLE);
+	lv_obj_add_event_cb(item, room_item_clicked_cb, LV_EVENT_CLICKED, (void *)(intptr_t)0);
+	s_room_item_objs[0] = item;
+
+	lv_obj_t *title_label = lv_label_create(item);
+	lv_obj_add_style(title_label, &s_style_item_title_label, LV_STATE_DEFAULT);
+	lv_obj_add_flag(title_label, LV_OBJ_FLAG_EVENT_BUBBLE);
+	lv_label_set_text(title_label, s_current_room_name);
+
+	lv_obj_t *sub_label = lv_label_create(item);
+	lv_obj_add_style(sub_label, &s_style_item_sub_title_label, LV_STATE_DEFAULT);
+	lv_obj_add_flag(sub_label, LV_OBJ_FLAG_EVENT_BUBBLE);
+	lv_label_set_text(sub_label, "1");
+
+	room_refresh_all_styles();
+	return;
+#else
+	size_t room_count = ws_room_cache_room_count();
+	LOG("talk page update room list: count=%u revision=%u truncated=%d current=%s",
+		(unsigned)room_count,
+		(unsigned)ws_room_cache_room_revision(),
+		(int)ws_room_cache_rooms_truncated(),
+		s_current_room_id);
+	if(room_count > ROOM_LIST_MAX_COUNT) {
+		room_count = ROOM_LIST_MAX_COUNT;
+	}
+	if(room_count == 0) {
+		lv_obj_t *item = lv_obj_create(obj_room_list);
+		lv_obj_add_style(item, &s_style_item_body, LV_STATE_DEFAULT);
+		lv_obj_t *title_label = lv_label_create(item);
+		lv_obj_add_style(title_label, &s_style_item_title_label, LV_STATE_DEFAULT);
+		lv_label_set_text(title_label, "暂无房间");
+		return;
+	}
+
+	for(int i = 0; i < (int)room_count; i ++ ) {
+		ws_room_record_t room = {0};
+		if(!ws_room_cache_get_room((size_t)i, &room)) {
+			continue;
+		}
+		LOG("talk page room[%d]: id=%s name=%s users=%d locked=%d",
+			i,
+			room.id,
+			room.name,
+			room.user_count,
+			(int)room.locked);
 		lv_obj_t *item = lv_obj_create(obj_room_list);
 		lv_obj_add_style(item, &s_style_room_item_body, LV_STATE_DEFAULT);
 		lv_obj_add_flag(item, LV_OBJ_FLAG_CLICKABLE);
@@ -367,28 +490,92 @@ static void update_room_list() {
 		lv_obj_t *title_label = lv_label_create(item);
 		lv_obj_add_style(title_label, &s_style_item_title_label, LV_STATE_DEFAULT);
 		lv_obj_add_flag(title_label, LV_OBJ_FLAG_EVENT_BUBBLE);
-		lv_label_set_text(title_label, room_list[i].room_name);
+		lv_label_set_text(title_label, room.name);
 
 		lv_obj_t *sub_label = lv_label_create(item);
 		lv_obj_add_style(sub_label, &s_style_item_sub_title_label, LV_STATE_DEFAULT);
 		lv_obj_add_flag(sub_label, LV_OBJ_FLAG_EVENT_BUBBLE);
-		lv_label_set_text_fmt(sub_label, "%d 人", room_list[i].user_qty);
+		lv_label_set_text_fmt(sub_label, "%d", room.user_count);
 
 	}
 
 	room_refresh_all_styles();
+#endif
 }
 
 static void update_user_list() {
-	for(int i = 0; i < (int)PAGE_TALK_USER_COUNT; i ++) {
+	if(obj_user_list == NULL) {
+		return;
+	}
+	lv_obj_clean(obj_user_list);
+
+#if !INTERCOM_ROOM_SYNC_ENABLE
+	const char *callsign = app_settings.user_callsign[0] != '\0' ?
+						   app_settings.user_callsign :
+						   app_settings.ws_callsign;
+	if(callsign == NULL || callsign[0] == '\0') {
+		callsign = USER_DEFAULT_CALLSIGN;
+	}
+	LOG("talk page update user list: static local user callsign=%s", callsign);
+	lv_obj_t *item = lv_obj_create(obj_user_list);
+	lv_obj_add_style(item, &s_style_item_body, LV_STATE_DEFAULT);
+	lv_obj_t *title_label = lv_label_create(item);
+	lv_obj_add_style(title_label, &s_style_item_title_label, LV_STATE_DEFAULT);
+	lv_label_set_text(title_label, callsign);
+	return;
+#else
+	char users_room[ROOM_ID_MAX_LEN + 1] = {0};
+	if(ws_room_cache_current_users_room(users_room, sizeof(users_room)) &&
+	   users_room[0] != '\0' && strcmp(users_room, s_current_room_id) != 0) {
+		LOG("talk page user list waiting: users_room=%s current_room=%s user_revision=%u",
+			users_room,
+			s_current_room_id,
+			(unsigned)ws_room_cache_user_revision());
+		lv_obj_t *item = lv_obj_create(obj_user_list);
+		lv_obj_add_style(item, &s_style_item_body, LV_STATE_DEFAULT);
+		lv_obj_t *title_label = lv_label_create(item);
+		lv_obj_add_style(title_label, &s_style_item_title_label, LV_STATE_DEFAULT);
+		lv_label_set_text(title_label, "等待成员列表");
+		return;
+	}
+
+	size_t user_count = ws_room_cache_user_count();
+	LOG("talk page update user list: room=%s count=%u revision=%u truncated=%d",
+		users_room[0] != '\0' ? users_room : "-",
+		(unsigned)user_count,
+		(unsigned)ws_room_cache_user_revision(),
+		(int)ws_room_cache_users_truncated());
+	if(user_count > ROOM_USERS_MAX_COUNT) {
+		user_count = ROOM_USERS_MAX_COUNT;
+	}
+	if(user_count == 0) {
+		lv_obj_t *item = lv_obj_create(obj_user_list);
+		lv_obj_add_style(item, &s_style_item_body, LV_STATE_DEFAULT);
+		lv_obj_t *title_label = lv_label_create(item);
+		lv_obj_add_style(title_label, &s_style_item_title_label, LV_STATE_DEFAULT);
+		lv_label_set_text(title_label, "暂无成员");
+		return;
+	}
+
+	for(int i = 0; i < (int)user_count; i ++) {
+		ws_room_user_record_t user = {0};
+		if(!ws_room_cache_get_user((size_t)i, &user)) {
+			continue;
+		}
+		LOG("talk page user[%d]: callsign=%s device=%s talking=%d fw=%s",
+			i,
+			user.callsign,
+			user.device_id,
+			(int)user.talking,
+			user.fw_version);
 		lv_obj_t *item = lv_obj_create(obj_user_list);
 		lv_obj_add_style(item, &s_style_item_body, LV_STATE_DEFAULT);
 
 		lv_obj_t *title_label = lv_label_create(item);
 		lv_obj_add_style(title_label, &s_style_item_title_label, LV_STATE_DEFAULT);
-		lv_label_set_text(title_label, user_list[i].callsign);
-		// lv_label_set_recolor(title_label, UI_COLOR_ACCENT);
+		lv_label_set_text_fmt(title_label, "%s%s", user.talking ? "* " : "", user.callsign);
 	}
+#endif
 }
 
 static void ptt_send_stop(void)
@@ -401,9 +588,81 @@ static void ptt_send_stop(void)
 	);
 }
 
+static bool page_talk_audio_active(void)
+{
+	return ptt_status == PTT_STATUS_CHECKING || ptt_status == PTT_STATUS_READY;
+}
+
+static void page_talk_request_room_snapshots(void)
+{
+#if !INTERCOM_ROOM_SYNC_ENABLE
+	LOG("talk page room snapshot request skipped: room sync disabled");
+	return;
+#endif
+	if(page_talk_audio_active()) {
+		s_room_refresh_deferred = true;
+		s_user_refresh_deferred = true;
+		return;
+	}
+	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_ROOM_LIST_REQ, 1, 0);
+	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_ROOM_USERS_REQ, 1, 0);
+}
+
+static void page_talk_join_room(void)
+{
+	LOG("talk page enter intercom room: room=%s", s_current_room_id);
+	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_AUDIO_STOP, 1, 0);
+#if INTERCOM_ROOM_SYNC_ENABLE
+	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_INTERCOM_ROOM_JOIN, 1, 0);
+	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_ROOM_LIST_REQ, 1, 0);
+	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_ROOM_USERS_REQ, 1, 0);
+#else
+	LOG("talk page room join skipped: room sync disabled");
+#endif
+}
+
+static void page_talk_leave_room(void)
+{
+	LOG("talk page leave intercom room: room=%s status=%d pressed=%d",
+		s_current_room_id,
+		(int)ptt_status,
+		(int)ptt_is_pressed);
+	if(ptt_status == PTT_STATUS_CHECKING || ptt_status == PTT_STATUS_READY) {
+		ptt_send_stop();
+	}
+	ptt_is_pressed = false;
+	ptt_set_status(PTT_STATUS_IDLE);
+#if INTERCOM_ROOM_SYNC_ENABLE
+	(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_INTERCOM_ROOM_LEAVE, 1, 0);
+#else
+	LOG("talk page room leave skipped: room sync disabled");
+#endif
+}
+
 static void ptt_set_status(ptt_status_t status)
 {
+	ptt_status_t old_status = ptt_status;
+	if(ptt_status != status) {
+		LOG("talk page ptt status: %d -> %d pressed=%d",
+			(int)ptt_status,
+			(int)status,
+			(int)ptt_is_pressed);
+	}
 	ptt_status = status;
+
+	bool was_audio_active = old_status == PTT_STATUS_CHECKING || old_status == PTT_STATUS_READY;
+	bool is_audio_active = ptt_status == PTT_STATUS_CHECKING || ptt_status == PTT_STATUS_READY;
+	if(was_audio_active && !is_audio_active && (s_room_refresh_deferred || s_user_refresh_deferred)) {
+		LOG("talk page flush deferred room snapshots: room=%d users=%d",
+			(int)s_room_refresh_deferred,
+			(int)s_user_refresh_deferred);
+		s_room_refresh_deferred = false;
+		s_user_refresh_deferred = false;
+#if INTERCOM_ROOM_SYNC_ENABLE
+		(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_ROOM_LIST_REQ, 1, 0);
+		(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_ROOM_USERS_REQ, 1, 0);
+#endif
+	}
 
 	if(obj_ptt_body == NULL || obj_ptt_label == NULL) {
 		return;
@@ -436,16 +695,48 @@ static void ptt_set_status(ptt_status_t status)
 		break;
 
 	case PTT_STATUS_ERROR:
-		lv_obj_set_style_bg_color(obj_ptt_body, UI_COLOR_DISABLED, LV_STATE_DEFAULT);
+		lv_obj_set_style_bg_color(obj_ptt_body, UI_COLOR_ERROR, LV_STATE_DEFAULT);
 		lv_label_set_text(obj_ptt_label, "失败");
 		break;
 	}
 }
 
-static void ptt_check_result(bool can_talk)
+static const char *ptt_ack_name(int code)
 {
-	if(!can_talk) {
-		ptt_set_status(ptt_is_pressed ? PTT_STATUS_BUSY : PTT_STATUS_IDLE);
+	switch(code) {
+		case MSG_INTERCOM_TALK_ACK_OK:
+			return "ok";
+		case MSG_INTERCOM_TALK_ACK_BUSY:
+			return "busy";
+		case MSG_INTERCOM_TALK_ACK_OFFLINE:
+			return "offline";
+		case MSG_INTERCOM_TALK_ACK_TIMEOUT:
+			return "timeout";
+		case MSG_INTERCOM_TALK_ACK_LOCAL_ERROR:
+			return "local_error";
+		default:
+			return "unknown";
+	}
+}
+
+static void ptt_check_result(int ack_code)
+{
+	LOG("talk page ptt ack: code=%d reason=%s pressed=%d",
+		ack_code,
+		ptt_ack_name(ack_code),
+		(int)ptt_is_pressed);
+	if(ack_code <= 0) {
+		if(!ptt_is_pressed) {
+			ptt_set_status(PTT_STATUS_IDLE);
+		} else if(ack_code == MSG_INTERCOM_TALK_ACK_BUSY) {
+			ptt_set_status(PTT_STATUS_BUSY);
+		} else if(ack_code == MSG_INTERCOM_TALK_ACK_OFFLINE) {
+			ptt_is_pressed = false;
+			ptt_set_status(PTT_STATUS_OFFLINE);
+		} else {
+			ptt_is_pressed = false;
+			ptt_set_status(PTT_STATUS_ERROR);
+		}
 		return;
 	}
 
@@ -458,6 +749,9 @@ static void ptt_check_result(bool can_talk)
 }
 
 static void check_ptt_status() {
+	LOG("talk page ptt start pressed: room=%s status=%d",
+		s_current_room_id,
+		(int)ptt_status);
 	ptt_set_status(PTT_STATUS_CHECKING);
 	(void)msg_send_cmd_value(
 		MSG_SRC_UI,
@@ -471,6 +765,7 @@ static void ptt_pressed(lv_event_t *e) {
 	(void)e;
 
 	if(ptt_status == PTT_STATUS_CHECKING || ptt_status == PTT_STATUS_READY) {
+		LOG("talk page ptt press ignored: status=%d", (int)ptt_status);
 		return;
 	}
 
@@ -482,18 +777,22 @@ static void ptt_released(lv_event_t *e) {
 	(void)e;
 
 	if(!ptt_is_pressed) {
+		LOG("talk page ptt release ignored: not pressed status=%d", (int)ptt_status);
 		return;
 	}
 
 	ptt_is_pressed = false;
 
 	if(ptt_status == PTT_STATUS_READY) {
+		LOG("talk page ptt release: send stop from ready");
 		ptt_send_stop();
 		ptt_set_status(PTT_STATUS_IDLE);
+		page_talk_request_room_snapshots();
 		return;
 	}
 
 	if(ptt_status == PTT_STATUS_CHECKING) {
+		LOG("talk page ptt release while checking: defer stop");
 		ptt_send_stop();
 		return;
 	}
@@ -605,12 +904,52 @@ static void page_talk_msg_handler(const msg_t *msg)
 
 	switch(msg->event) {
 		case MSG_EVT_SYS_INTERCOM_TALK_START_ACK:
-			ptt_check_result(msg->data.value != 0);
+			ptt_check_result(msg->data.value);
+			break;
+
+		case MSG_EVT_SYS_WS_CONNECTED:
+#if INTERCOM_ROOM_SYNC_ENABLE
+			LOG("talk page ws connected: request room list/users");
+			page_talk_request_room_snapshots();
+#else
+			LOG("talk page ws connected: room sync disabled");
+#endif
+			break;
+
+		case MSG_EVT_SYS_WS_ROOM_LIST_UPDATED:
+#if INTERCOM_ROOM_SYNC_ENABLE
+			if(page_talk_audio_active()) {
+				s_room_refresh_deferred = true;
+				break;
+			}
+			LOG("talk page room list updated event: revision=%d", msg->data.value);
+			room_init_default();
+			update_room_list();
+#else
+			LOG("talk page room list update ignored: room sync disabled revision=%d", msg->data.value);
+#endif
+			break;
+
+		case MSG_EVT_SYS_WS_ROOM_USERS_UPDATED:
+#if INTERCOM_ROOM_SYNC_ENABLE
+			if(page_talk_audio_active()) {
+				s_user_refresh_deferred = true;
+				break;
+			}
+			LOG("talk page room users updated event: revision=%d", msg->data.value);
+			update_user_list();
+#else
+			LOG("talk page room users update ignored: room sync disabled revision=%d", msg->data.value);
+#endif
 			break;
 
 		case MSG_EVT_SYS_WS_DISCONNECTED:
 		case MSG_EVT_SYS_WS_HEARTBEAT_LOST:
 		case MSG_EVT_SYS_WIFI_DISCONNECTED:
+			LOG("talk page connection lost event=%d status=%d pressed=%d",
+				(int)msg->event,
+				(int)ptt_status,
+				(int)ptt_is_pressed);
 			if(ptt_status == PTT_STATUS_CHECKING || ptt_status == PTT_STATUS_READY) {
 				ptt_is_pressed = false;
 				ptt_set_status(PTT_STATUS_OFFLINE);
@@ -625,6 +964,7 @@ static void page_talk_msg_handler(const msg_t *msg)
 static const ui_page_ops_t page_talk_ops = {
 	.on_input = page_talk_input_handler,
 	.on_msg = page_talk_msg_handler,
+	.on_leave = page_talk_leave_room,
 };
 
 esp_err_t page_talk_show(lv_obj_t *p) {
@@ -688,6 +1028,7 @@ esp_err_t page_talk_show(lv_obj_t *p) {
 
 	update_room_list();
 	update_user_list();
+	page_talk_join_room();
 
 
 	ptt_set_status(PTT_STATUS_IDLE);

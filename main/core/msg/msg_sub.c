@@ -206,6 +206,10 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
         case MSG_EVT_CMD_WS_SET_ENABLE:
         case MSG_EVT_CMD_WS_RECONNECT:
         case MSG_EVT_CMD_WS_SEND_CW:
+        case MSG_EVT_CMD_WS_ROOM_LIST_REQ:
+        case MSG_EVT_CMD_WS_ROOM_USERS_REQ:
+        case MSG_EVT_CMD_WS_INTERCOM_ROOM_JOIN:
+        case MSG_EVT_CMD_WS_INTERCOM_ROOM_LEAVE:
         case MSG_EVT_CMD_WS_INTERCOM_TALK_START:
         case MSG_EVT_CMD_WS_INTERCOM_TALK_STOP:
             *out_topic = MSG_TOPIC_WEBSOCKET_CMD;
@@ -231,6 +235,8 @@ static esp_err_t msg_topic_from_msg(const msg_t *msg, msg_topic_t *out_topic)
         case MSG_EVT_SYS_WS_DISCONNECTED:
         case MSG_EVT_SYS_WS_HEARTBEAT_LOST:
         case MSG_EVT_SYS_WS_CW_RECEIVED:
+        case MSG_EVT_SYS_WS_ROOM_LIST_UPDATED:
+        case MSG_EVT_SYS_WS_ROOM_USERS_UPDATED:
             *out_topic = MSG_TOPIC_WEBSOCKET_EVENT;
             return ESP_OK;
 

@@ -23,6 +23,15 @@ typedef struct {
 
 static mic_ctx_t s_mic = {0};
 
+static void mic_cleanup_channel_locked(void)
+{
+    if(s_mic.rx_chan) {
+        (void)i2s_channel_disable(s_mic.rx_chan);
+        (void)i2s_del_channel(s_mic.rx_chan);
+        s_mic.rx_chan = NULL;
+    }
+}
+
 static esp_err_t mic_reconfig_sample_rate_locked(uint32_t sample_rate)
 {
     esp_err_t err = i2s_channel_disable(s_mic.rx_chan);
@@ -88,6 +97,12 @@ esp_err_t mic_init(const mic_config_t *cfg)
 
     esp_err_t err = i2s_new_channel(&chan_cfg, NULL, &s_mic.rx_chan);
     if(err != ESP_OK) {
+        LOG("mic i2s new channel failed: port=%d err=%s", MIC_I2S_PORT, esp_err_to_name(err));
+        s_mic.rx_chan = NULL;
+        if(s_mic.lock) {
+            vSemaphoreDelete(s_mic.lock);
+            s_mic.lock = NULL;
+        }
         return err;
     }
 
@@ -122,12 +137,22 @@ esp_err_t mic_init(const mic_config_t *cfg)
     err = i2s_channel_init_std_mode(s_mic.rx_chan, &std_cfg);
     if(err != ESP_OK) {
         LOG("mic i2s std init failed: %s", esp_err_to_name(err));
+        mic_cleanup_channel_locked();
+        if(s_mic.lock) {
+            vSemaphoreDelete(s_mic.lock);
+            s_mic.lock = NULL;
+        }
         return err;
     }
 
     err = i2s_channel_enable(s_mic.rx_chan);
     if(err != ESP_OK) {
         LOG("mic i2s enable failed: %s", esp_err_to_name(err));
+        mic_cleanup_channel_locked();
+        if(s_mic.lock) {
+            vSemaphoreDelete(s_mic.lock);
+            s_mic.lock = NULL;
+        }
         return err;
     }
 
@@ -147,9 +172,7 @@ esp_err_t mic_deinit(void)
     }
 
     if(s_mic.rx_chan) {
-        (void)i2s_channel_disable(s_mic.rx_chan);
-        (void)i2s_del_channel(s_mic.rx_chan);
-        s_mic.rx_chan = NULL;
+        mic_cleanup_channel_locked();
     }
 
     if(s_mic.lock) {
@@ -210,7 +233,7 @@ esp_err_t mic_read_raw(void *buf, size_t bytes, size_t *out_bytes, TickType_t ti
 
     if(err == ESP_ERR_TIMEOUT) {
         s_mic.raw_read_timeout_count++;
-        if(s_mic.raw_read_timeout_count <= 5 || (s_mic.raw_read_timeout_count % 50U) == 0U ||
+        if(s_mic.raw_read_timeout_count <= 3 || (s_mic.raw_read_timeout_count % 10000U) == 0U ||
            read_bytes > 0) {
             LOG("mic raw read timeout: requested=%u got=%u count=%u",
                 (unsigned)bytes,

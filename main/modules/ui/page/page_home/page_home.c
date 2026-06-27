@@ -285,10 +285,10 @@ static void message_title_create(lv_obj_t *bubble, const home_msg_view_t *msg, b
 	}
 }
 
-static void add_msg(const home_msg_view_t *msg)
+static lv_obj_t *add_msg(const home_msg_view_t *msg)
 {
 	if(msg == NULL || msg->code == NULL || msg->code[0] == '\0') {
-		return;
+		return NULL;
 	}
 
 	bool is_self = home_msg_is_self(msg);
@@ -321,6 +321,8 @@ static void add_msg(const home_msg_view_t *msg)
 	lv_obj_add_style(context_label, &s_style_m_context_label, LV_STATE_DEFAULT);
 	const char *display_code = msg->rendered_code[0] != '\0' ? msg->rendered_code : msg->code;
 	message_label_set_text(context_label, display_code);
+
+	return msg_item;
 }
 
 static void page_home_scroll_msg_bottom(void)
@@ -331,6 +333,18 @@ static void page_home_scroll_msg_bottom(void)
 
 	lv_obj_update_layout(msg_body);
 	lv_obj_scroll_to_y(msg_body, lv_obj_get_scroll_bottom(msg_body), LV_ANIM_OFF);
+}
+
+static void page_home_scroll_msg_to_item(lv_obj_t *item)
+{
+	if(msg_body == NULL || item == NULL) {
+		return;
+	}
+
+	lv_obj_update_layout(msg_body);
+	lv_obj_update_layout(item);
+	lv_obj_scroll_to_view(item, LV_ANIM_ON);
+	page_home_scroll_msg_bottom();
 }
 
 static void page_home_scroll_msg_step(bool down)
@@ -367,10 +381,10 @@ static void page_home_add_record(const ws_cw_record_t *record, bool scroll_to_bo
 		.time = record->time,
 	};
 	(void)cw_keyer_actor_render_display_text(record->code, view.rendered_code, sizeof(view.rendered_code));
-	add_msg(&view);
+	lv_obj_t *item = add_msg(&view);
 
 	if(scroll_to_bottom) {
-		page_home_scroll_msg_bottom();
+		page_home_scroll_msg_to_item(item);
 	}
 }
 

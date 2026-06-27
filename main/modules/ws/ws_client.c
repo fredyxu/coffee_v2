@@ -95,6 +95,7 @@ esp_err_t ws_client_init(const ws_client_config_t *cfg)
 	esp_websocket_client_config_t websocket_cfg = {
 		.uri = cfg->url,
 		.buffer_size = 1024,
+		.task_stack = WS_CLIENT_TASK_STACK,
 		.disable_auto_reconnect = true,
 		.network_timeout_ms = WS_NETWORK_TIMEOUT_MS,
 	};

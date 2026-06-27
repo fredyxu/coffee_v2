@@ -52,7 +52,6 @@ static void ui_nav_push_current(void) {
  * @return ESP_OK 成功，其他表示参数或状态有误
  */
 static esp_err_t page_show(ui_page_nav_param_t param) {
-	ui_actor_clean_ops();
     if(param.page_id < PAGE_INIT || param.page_id >= PAGE_NONE) {
         LOG("无效的页面 ID: %d", param.page_id);
         return ESP_ERR_INVALID_ARG;
@@ -68,6 +67,8 @@ static esp_err_t page_show(ui_page_nav_param_t param) {
         return ESP_OK;
     }
 
+	ui_actor_leave_current_page();
+	ui_actor_clean_ops();
     lv_obj_clean(screen);
 
     switch(param.page_id) {

@@ -11,6 +11,7 @@
 /* 聚合子配置 */
 #include "config/config_sys_display.h"	// IWYU pragma: export
 #include "config/config_mic.h"			// IWYU pragma: export
+#include "config/config_room.h"			// IWYU pragma: export
 #include "config/config_sys_audio.h"	// IWYU pragma: export
 #include "config/config_sys_task.h"		// IWYU pragma: export
 #include "config/config_sys_wifi.h"		// IWYU pragma: export

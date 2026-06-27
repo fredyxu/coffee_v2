@@ -11,7 +11,7 @@
 #define MIC_CHANNEL_FORMAT 1
 
 /* 麦克风 I2S DMA：提高可降低采集欠载概率，但增加 RAM 占用。 */
-#define MIC_I2S_DMA_DESC_NUM 4
+#define MIC_I2S_DMA_DESC_NUM 2
 #define MIC_I2S_DMA_FRAME_NUM 160
 
 /* 对讲音频采样：8kHz / 20ms 一帧。 */
@@ -33,8 +33,11 @@
 #define INTERCOM_AUDIO_FRAME_BYTES (INTERCOM_AUDIO_FRAME_SAMPLES * INTERCOM_AUDIO_ENCODED_BYTES_PER_SAMPLE)
 #define INTERCOM_AUDIO_PCM16_FRAME_BYTES (INTERCOM_AUDIO_FRAME_SAMPLES * 2)
 
-/* WebSocket 音频批量发送帧数。5 帧约 100ms，适合远程 WSS 降低写入频率。 */
-#define INTERCOM_AUDIO_WS_BATCH_FRAMES 5
+/* WebSocket 音频批量发送帧数。3 帧一包降低远程 WSS/TLS 写入开销，单包约 60ms。 */
+#define INTERCOM_AUDIO_WS_BATCH_FRAMES 3
+
+/* 每处理一帧音频后的主动让步时间。0 表示只依赖阻塞 I/O 和 FreeRTOS 抢占调度。 */
+#define INTERCOM_AUDIO_SEND_YIELD_MS 0
 
 /* 麦克风后处理参数 */
 #define MIC_NOISE_GATE_LOW_MEAN_ABS 40U

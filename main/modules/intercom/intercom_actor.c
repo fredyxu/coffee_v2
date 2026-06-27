@@ -19,7 +19,7 @@
 
 #define INTERCOM_ACTOR_POLL_TICKS pdMS_TO_TICKS(100)
 #define INTERCOM_ACTOR_AUDIO_FRAME_WAIT_TICKS pdMS_TO_TICKS(INTERCOM_AUDIO_FRAME_MS)
-#define INTERCOM_ACTOR_AUDIO_SEND_YIELD_TICKS pdMS_TO_TICKS(1)
+#define INTERCOM_ACTOR_AUDIO_SEND_YIELD_TICKS pdMS_TO_TICKS(INTERCOM_AUDIO_SEND_YIELD_MS)
 #define INTERCOM_ACTOR_MIC_STOP_WAIT_TICKS pdMS_TO_TICKS(INTERCOM_AUDIO_FRAME_MS * 3)
 #define INTERCOM_TALK_ACK_TIMEOUT_TICKS pdMS_TO_TICKS(3000)
 
@@ -50,12 +50,30 @@ static bool intercom_actor_can_request_talk(void)
 		   ws_client_is_connected();
 }
 
-static void intercom_actor_send_ack(bool ok)
+static const char *intercom_actor_ack_name(int code)
+{
+	switch(code) {
+		case MSG_INTERCOM_TALK_ACK_OK:
+			return "ok";
+		case MSG_INTERCOM_TALK_ACK_BUSY:
+			return "busy";
+		case MSG_INTERCOM_TALK_ACK_OFFLINE:
+			return "offline";
+		case MSG_INTERCOM_TALK_ACK_TIMEOUT:
+			return "timeout";
+		case MSG_INTERCOM_TALK_ACK_LOCAL_ERROR:
+			return "local_error";
+		default:
+			return "unknown";
+	}
+}
+
+static void intercom_actor_send_ack_code(int code)
 {
 	(void)msg_send_sys_value(
 		MSG_SRC_INTERCOM,
 		MSG_EVT_SYS_INTERCOM_TALK_START_ACK,
-		ok ? 1 : 0,
+		code,
 		0
 	);
 }
@@ -92,30 +110,38 @@ static void intercom_actor_stop_audio(void)
 		(unsigned)s_actor.audio_pop_error_count);
 }
 
+static void intercom_actor_reset_audio_counters(void)
+{
+	s_actor.audio_seq = 0;
+	s_actor.audio_send_ok_count = 0;
+	s_actor.audio_send_fail_count = 0;
+	s_actor.audio_pop_timeout_count = 0;
+	s_actor.audio_pop_error_count = 0;
+}
+
 static esp_err_t intercom_actor_start_audio(void)
 {
 	esp_err_t err = mic_actor_init();
 	if(err != ESP_OK) {
+		LOG("intercom audio start failed: step=mic_init err=%s", esp_err_to_name(err));
 		return err;
 	}
 
 	err = mic_actor_set_sample_rate(INTERCOM_AUDIO_SAMPLE_RATE, pdMS_TO_TICKS(100));
 	if(err != ESP_OK) {
+		LOG("intercom audio start failed: step=set_sample_rate err=%s", esp_err_to_name(err));
 		intercom_actor_stop_audio();
 		return err;
 	}
 
 	err = mic_actor_start(pdMS_TO_TICKS(100));
 	if(err != ESP_OK) {
+		LOG("intercom audio start failed: step=mic_start err=%s", esp_err_to_name(err));
 		intercom_actor_stop_audio();
 		return err;
 	}
 
-	s_actor.audio_seq = 0;
-	s_actor.audio_send_ok_count = 0;
-	s_actor.audio_send_fail_count = 0;
-	s_actor.audio_pop_timeout_count = 0;
-	s_actor.audio_pop_error_count = 0;
+	intercom_actor_reset_audio_counters();
 	LOG("intercom audio started: sample_rate=%u frame_samples=%u",
 		(unsigned)INTERCOM_AUDIO_SAMPLE_RATE,
 		(unsigned)INTERCOM_AUDIO_FRAME_SAMPLES);
@@ -125,17 +151,27 @@ static esp_err_t intercom_actor_start_audio(void)
 static void intercom_actor_start_request(void)
 {
 	if(s_actor.waiting_ack || s_actor.talking) {
+		LOG("intercom talk start ignored: waiting_ack=%d talking=%d",
+			(int)s_actor.waiting_ack,
+			(int)s_actor.talking);
 		return;
 	}
 
 	if(!intercom_actor_can_request_talk()) {
-		intercom_actor_send_ack(false);
+		LOG("intercom talk start rejected locally: ws_enable=%d wifi=%d ws=%d",
+			(int)app_settings.ws_enable,
+			(int)wifi_module_is_connected(),
+			(int)ws_client_is_connected());
+		intercom_actor_send_ack_code(MSG_INTERCOM_TALK_ACK_OFFLINE);
 		return;
 	}
 
 	s_actor.waiting_ack = true;
 	s_actor.cancel_after_ack = false;
 	s_actor.ack_deadline = xTaskGetTickCount() + INTERCOM_TALK_ACK_TIMEOUT_TICKS;
+	LOG("intercom talk start request sent: room=%s callsign=%s",
+		app_settings.ws_room[0] != '\0' ? app_settings.ws_room : "default",
+		app_settings.user_callsign[0] != '\0' ? app_settings.user_callsign : app_settings.ws_callsign);
 	intercom_actor_send_ws_start();
 }
 
@@ -143,11 +179,16 @@ static void intercom_actor_stop_request(void)
 {
 	if(s_actor.waiting_ack) {
 		s_actor.cancel_after_ack = true;
+		LOG("intercom talk stop deferred: waiting_ack=1");
 		return;
 	}
 
 	if(s_actor.talking) {
 		s_actor.talking = false;
+		LOG("intercom talk stopping: sent=%u fail=%u pop_timeout=%u",
+			(unsigned)s_actor.audio_send_ok_count,
+			(unsigned)s_actor.audio_send_fail_count,
+			(unsigned)s_actor.audio_pop_timeout_count);
 		esp_err_t flush_err = ws_actor_flush_intercom_audio();
 		if(flush_err != ESP_OK) {
 			LOG("intercom audio flush failed: %s", esp_err_to_name(flush_err));
@@ -164,8 +205,13 @@ static void intercom_actor_handle_talk_ack(const msg_t *msg)
 		return;
 	}
 
-	bool ok = msg->data.value != 0;
+	int ack_code = msg->data.value;
+	bool ok = ack_code > 0;
 	s_actor.waiting_ack = false;
+	LOG("intercom talk ack received: code=%d reason=%s cancel_after_ack=%d",
+		ack_code,
+		intercom_actor_ack_name(ack_code),
+		(int)s_actor.cancel_after_ack);
 
 	if(!ok) {
 		s_actor.cancel_after_ack = false;
@@ -176,6 +222,7 @@ static void intercom_actor_handle_talk_ack(const msg_t *msg)
 	if(s_actor.cancel_after_ack) {
 		s_actor.cancel_after_ack = false;
 		s_actor.talking = false;
+		LOG("intercom talk ack accepted after release, sending stop");
 		intercom_actor_send_ws_stop();
 		return;
 	}
@@ -183,7 +230,7 @@ static void intercom_actor_handle_talk_ack(const msg_t *msg)
 	if(intercom_actor_start_audio() != ESP_OK) {
 		s_actor.talking = false;
 		intercom_actor_send_ws_stop();
-		intercom_actor_send_ack(false);
+		intercom_actor_send_ack_code(MSG_INTERCOM_TALK_ACK_LOCAL_ERROR);
 		return;
 	}
 
@@ -212,6 +259,10 @@ static void intercom_actor_apply_msg(const msg_t *msg)
 		case MSG_EVT_SYS_WS_DISCONNECTED:
 		case MSG_EVT_SYS_WS_HEARTBEAT_LOST:
 		case MSG_EVT_SYS_WIFI_DISCONNECTED:
+			LOG("intercom reset by connection event: event=%d waiting_ack=%d talking=%d",
+				(int)msg->event,
+				(int)s_actor.waiting_ack,
+				(int)s_actor.talking);
 			s_actor.waiting_ack = false;
 			s_actor.cancel_after_ack = false;
 			if(s_actor.talking) {
@@ -239,7 +290,8 @@ static void intercom_actor_check_timeout(void)
 	s_actor.waiting_ack = false;
 	s_actor.cancel_after_ack = false;
 	s_actor.talking = false;
-	intercom_actor_send_ack(false);
+	LOG("intercom talk ack timeout");
+	intercom_actor_send_ack_code(MSG_INTERCOM_TALK_ACK_TIMEOUT);
 }
 
 static void intercom_actor_poll_audio(void)
@@ -252,7 +304,7 @@ static void intercom_actor_poll_audio(void)
 	esp_err_t err = mic_actor_pop_frame(&frame, INTERCOM_ACTOR_AUDIO_FRAME_WAIT_TICKS);
 	if(err == ESP_ERR_TIMEOUT) {
 		s_actor.audio_pop_timeout_count++;
-		if(s_actor.audio_pop_timeout_count <= 5 || (s_actor.audio_pop_timeout_count % 50U) == 0U) {
+		if(s_actor.audio_pop_timeout_count <= 3 || (s_actor.audio_pop_timeout_count % 1000U) == 0U) {
 			LOG("intercom mic frame timeout: count=%u sent=%u",
 				(unsigned)s_actor.audio_pop_timeout_count,
 				(unsigned)s_actor.audio_send_ok_count);
@@ -297,7 +349,9 @@ static void intercom_actor_poll_audio(void)
 		}
 	}
 
-	vTaskDelay(INTERCOM_ACTOR_AUDIO_SEND_YIELD_TICKS);
+	if(INTERCOM_ACTOR_AUDIO_SEND_YIELD_TICKS > 0) {
+		vTaskDelay(INTERCOM_ACTOR_AUDIO_SEND_YIELD_TICKS);
+	}
 }
 
 static void intercom_actor_task(void *arg)

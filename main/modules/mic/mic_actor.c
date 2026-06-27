@@ -6,6 +6,7 @@
 
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "esp_heap_caps.h"
 #include "config/config_sys.h"
 #include "core/utils/log.h"
 #include "modules/mic/mic.h"
@@ -35,11 +36,19 @@ typedef struct {
 static mic_actor_ctx_t s_actor = {0};
 static const TickType_t MIC_ACTOR_ERROR_BACKOFF_TICKS = pdMS_TO_TICKS(10);
 static const TickType_t MIC_ACTOR_FRAME_READ_TIMEOUT_TICKS = pdMS_TO_TICKS(INTERCOM_AUDIO_FRAME_MS * 2);
-static const TickType_t MIC_ACTOR_TIMEOUT_BACKOFF_TICKS = pdMS_TO_TICKS(1);
+static const TickType_t MIC_ACTOR_TIMEOUT_BACKOFF_TICKS = pdMS_TO_TICKS(10);
 static int32_t s_dc_estimate_q8;
 static int32_t s_noise_gain_q15 = 32768;
 static int16_t s_lowpass_prev_sample;
 static int16_t s_lowpass_prev2_sample;
+
+static void mic_actor_log_heap(const char *stage)
+{
+    LOG("mic actor heap: stage=%s free=%u largest=%u",
+        stage != NULL ? stage : "-",
+        (unsigned)heap_caps_get_free_size(MALLOC_CAP_8BIT),
+        (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+}
 
 static esp_err_t mic_actor_post_cmd(const mic_actor_cmd_t *cmd, TickType_t timeout_ticks)
 {
@@ -247,7 +256,7 @@ static void mic_actor_task(void *arg)
                 }
             } else if(err == ESP_ERR_TIMEOUT) {
                 s_actor.capture_timeout_count++;
-                if(s_actor.capture_timeout_count <= 5 || (s_actor.capture_timeout_count % 50U) == 0U) {
+                if(s_actor.capture_timeout_count <= 3 || (s_actor.capture_timeout_count % 10000U) == 0U) {
                     LOG("mic capture timeout: count=%u frames=%u",
                         (unsigned)s_actor.capture_timeout_count,
                         (unsigned)s_actor.capture_ok_count);
@@ -286,25 +295,37 @@ static void mic_actor_task(void *arg)
 esp_err_t mic_actor_init(void)
 {
     if(s_actor.task != NULL) {
+        LOG("mic actor init skipped: task already running");
         return ESP_OK;
     }
 
+    mic_actor_log_heap("before_init");
     mic_config_t cfg = mic_default_config();
     esp_err_t err = mic_init(&cfg);
     if(err != ESP_OK) {
         LOG("mic_init failed: %s", esp_err_to_name(err));
+        mic_actor_log_heap("after_mic_init_fail");
         return err;
     }
+    mic_actor_log_heap("after_mic_init");
 
     s_actor.cmd_q = xQueueCreate(MIC_ACTOR_CMD_QUEUE_LEN, sizeof(mic_actor_cmd_t));
     if(s_actor.cmd_q == NULL) {
+        LOG("mic actor cmd queue create failed: len=%u", (unsigned)MIC_ACTOR_CMD_QUEUE_LEN);
+        mic_actor_log_heap("cmd_queue_fail");
+        (void)mic_deinit();
         return ESP_ERR_NO_MEM;
     }
 
     s_actor.frame_q = xQueueCreate(MIC_ACTOR_FRAME_QUEUE_LEN, sizeof(mic_frame_t));
     if(s_actor.frame_q == NULL) {
+        LOG("mic actor frame queue create failed: len=%u frame_bytes=%u",
+            (unsigned)MIC_ACTOR_FRAME_QUEUE_LEN,
+            (unsigned)sizeof(mic_frame_t));
+        mic_actor_log_heap("frame_queue_fail");
         vQueueDelete(s_actor.cmd_q);
         s_actor.cmd_q = NULL;
+        (void)mic_deinit();
         return ESP_ERR_NO_MEM;
     }
 
@@ -318,10 +339,17 @@ esp_err_t mic_actor_init(void)
         TASK_CORE_MIC
     );
     if(ok != pdPASS) {
+        LOG("mic actor task create failed: stack=%u prio=%u core=%d frame_bytes=%u",
+            (unsigned)MIC_ACTOR_TASK_STACK,
+            (unsigned)TASK_PRIO_MIC,
+            (int)TASK_CORE_MIC,
+            (unsigned)sizeof(mic_frame_t));
+        mic_actor_log_heap("task_create_fail");
         vQueueDelete(s_actor.frame_q);
         vQueueDelete(s_actor.cmd_q);
         s_actor.frame_q = NULL;
         s_actor.cmd_q = NULL;
+        (void)mic_deinit();
         return ESP_FAIL;
     }
 

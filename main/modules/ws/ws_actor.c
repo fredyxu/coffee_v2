@@ -21,7 +21,11 @@
 #include "modules/wifi/wifi.h"
 #include "modules/ws/ws_client.h"
 #include "modules/ws/ws_cw_cache.h"
+#include "modules/ws/ws_room_cache.h"
 
+#if INTERCOM_ROOM_SYNC_ENABLE
+#include "cJSON.h"
+#endif
 #define WS_FINAL_URL_MAX 256
 #define WS_DEVICE_ID_MAX 32
 #define WS_ACTOR_POLL_TICKS pdMS_TO_TICKS(200)
@@ -61,6 +65,7 @@ typedef struct {
 	TaskHandle_t wifi_stop_waiter;
 	esp_err_t wifi_stop_result;
 	uint32_t audio_send_consecutive_failures;
+	bool intercom_tx_active;
 } ws_actor_ctx_t;
 
 typedef struct __attribute__((packed)) {
@@ -176,6 +181,8 @@ static void ws_actor_start_sntp(void)
 		return;
 	}
 
+	setenv("TZ", "CST-8", 1);
+	tzset();
 	esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
 	esp_sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
 	esp_sntp_setservername(0, "ntp.aliyun.com");
@@ -549,6 +556,123 @@ static void ws_actor_send_cw(void)
 	free(code_esc);
 }
 
+#if INTERCOM_ROOM_SYNC_ENABLE
+static esp_err_t ws_actor_send_json_text(const char *json)
+{
+	if(json == NULL || !app_settings.ws_enable || !s_actor.wifi_connected ||
+	   !wifi_module_is_connected() || !ws_client_is_connected()) {
+		return ESP_ERR_INVALID_STATE;
+	}
+
+	esp_err_t err = ws_client_send_text(json);
+	if(err == ESP_OK) {
+		ws_actor_schedule_heartbeat();
+	}
+	return err;
+}
+
+static void ws_actor_send_room_list_req(void)
+{
+	esp_err_t err = ws_actor_send_json_text("{\"type\":\"room_list_req\"}");
+	if(err == ESP_OK) {
+		LOG("ws room list request sent");
+	}
+	if(err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+		LOG("ws room list request failed: %s", esp_err_to_name(err));
+	} else if(err == ESP_ERR_INVALID_STATE) {
+		LOG("ws room list request skipped: not connected");
+	}
+}
+
+static void ws_actor_send_room_users_req(void)
+{
+	const char *room = app_settings.ws_room[0] != '\0' ? app_settings.ws_room : "default";
+	size_t room_len = ws_actor_json_escaped_len(room);
+	size_t json_size = room_len + 48;
+	char *json = (char *)malloc(json_size);
+	char *room_esc = (char *)malloc(room_len + 1);
+	if(json == NULL || room_esc == NULL) {
+		free(json);
+		free(room_esc);
+		return;
+	}
+
+	ws_actor_json_escape(room, room_esc);
+	int written = snprintf(json, json_size, "{\"type\":\"room_users_req\",\"room\":\"%s\"}", room_esc);
+	free(room_esc);
+	if(written <= 0 || (size_t)written >= json_size) {
+		free(json);
+		return;
+	}
+
+	esp_err_t err = ws_actor_send_json_text(json);
+	if(err == ESP_OK) {
+		LOG("ws room users request sent: room=%s", room);
+	}
+	if(err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+		LOG("ws room users request failed: room=%s err=%s", room, esp_err_to_name(err));
+	} else if(err == ESP_ERR_INVALID_STATE) {
+		LOG("ws room users request skipped: room=%s not connected", room);
+	}
+	free(json);
+}
+
+static void ws_actor_send_intercom_room_presence(const char *type)
+{
+	if(type == NULL) {
+		return;
+	}
+
+	const char *room = app_settings.ws_room[0] != '\0' ? app_settings.ws_room : "default";
+	const char *callsign = app_settings.user_callsign[0] != '\0' ?
+						   app_settings.user_callsign :
+						   app_settings.ws_callsign;
+	if(callsign == NULL || callsign[0] == '\0') {
+		callsign = USER_DEFAULT_CALLSIGN;
+	}
+
+	size_t type_len = ws_actor_json_escaped_len(type);
+	size_t room_len = ws_actor_json_escaped_len(room);
+	size_t callsign_len = ws_actor_json_escaped_len(callsign);
+	size_t json_size = type_len + room_len + callsign_len + 80;
+	char *json = (char *)malloc(json_size);
+	char *type_esc = (char *)malloc(type_len + 1);
+	char *room_esc = (char *)malloc(room_len + 1);
+	char *callsign_esc = (char *)malloc(callsign_len + 1);
+	if(json == NULL || type_esc == NULL || room_esc == NULL || callsign_esc == NULL) {
+		free(json);
+		free(type_esc);
+		free(room_esc);
+		free(callsign_esc);
+		return;
+	}
+
+	ws_actor_json_escape(type, type_esc);
+	ws_actor_json_escape(room, room_esc);
+	ws_actor_json_escape(callsign, callsign_esc);
+	int written = snprintf(
+		json,
+		json_size,
+		"{\"type\":\"%s\",\"room\":\"%s\",\"callsign\":\"%s\"}",
+		type_esc,
+		room_esc,
+		callsign_esc
+	);
+	if(written > 0 && (size_t)written < json_size) {
+		esp_err_t err = ws_actor_send_json_text(json);
+		LOG("ws intercom room presence sent: type=%s room=%s err=%s",
+			type,
+			room,
+			esp_err_to_name(err));
+	}
+
+	free(json);
+	free(type_esc);
+	free(room_esc);
+	free(callsign_esc);
+}
+#endif
+
 static void ws_actor_send_heartbeat(void)
 {
 	if(s_actor.state != WS_ACTOR_STATE_CONNECTED || !app_settings.ws_enable ||
@@ -731,13 +855,28 @@ static void ws_actor_handle_intercom_talk_ack(const char *json)
 {
 	bool ok = false;
 	if(!ws_actor_json_get_bool(json, "ok", &ok)) {
+		LOG("ws intercom talk ack ignored: missing ok");
 		return;
 	}
+
+	char reason[24] = {0};
+	(void)ws_actor_json_get_string(json, "reason", reason, sizeof(reason));
+	int ack_code = ok ? MSG_INTERCOM_TALK_ACK_OK : MSG_INTERCOM_TALK_ACK_LOCAL_ERROR;
+	if(!ok && strcmp(reason, "busy") == 0) {
+		ack_code = MSG_INTERCOM_TALK_ACK_BUSY;
+	}
+	if(!ok) {
+		s_actor.intercom_tx_active = false;
+	}
+	LOG("ws intercom talk ack: ok=%d reason=%s code=%d",
+		(int)ok,
+		reason[0] != '\0' ? reason : "-",
+		ack_code);
 
 	(void)msg_send_sys_value(
 		MSG_SRC_WS,
 		MSG_EVT_SYS_INTERCOM_TALK_START_ACK,
-		ok ? 1 : 0,
+		ack_code,
 		0
 	);
 }
@@ -749,6 +888,9 @@ static void ws_actor_handle_intercom_talking(const char *json)
 
 	(void)ws_actor_json_get_bool(json, "talking", &talking);
 	(void)ws_actor_json_get_string(json, "callsign", callsign, sizeof(callsign));
+	LOG("ws intercom talking: callsign=%s talking=%d",
+		callsign[0] != '\0' ? callsign : "-",
+		(int)talking);
 
 	(void)msg_send_sys_text(
 		MSG_SRC_WS,
@@ -756,7 +898,183 @@ static void ws_actor_handle_intercom_talking(const char *json)
 		talking ? callsign : "",
 		0
 	);
+
+	if(!talking) {
+		if(callsign[0] == '\0' || strcmp(callsign, app_settings.user_callsign) == 0 ||
+		   strcmp(callsign, app_settings.ws_callsign) == 0) {
+			s_actor.intercom_tx_active = false;
+		}
+	}
 }
+
+#if INTERCOM_ROOM_SYNC_ENABLE
+static void ws_actor_cjson_copy_string(cJSON *object, const char *key, char *out, size_t out_size)
+{
+	if(out == NULL || out_size == 0) {
+		return;
+	}
+	out[0] = '\0';
+	cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key);
+	if(cJSON_IsString(item) && item->valuestring != NULL) {
+		strncpy(out, item->valuestring, out_size - 1);
+		out[out_size - 1] = '\0';
+	}
+}
+
+static uint32_t ws_actor_cjson_u32(cJSON *object, const char *key)
+{
+	cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key);
+	if(cJSON_IsNumber(item) && item->valuedouble >= 0) {
+		return (uint32_t)item->valuedouble;
+	}
+	return 0;
+}
+
+static int ws_actor_cjson_int(cJSON *object, const char *key)
+{
+	cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key);
+	return cJSON_IsNumber(item) ? item->valueint : 0;
+}
+
+static bool ws_actor_cjson_bool(cJSON *object, const char *key)
+{
+	cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key);
+	return cJSON_IsTrue(item);
+}
+
+static void ws_actor_handle_room_list_snapshot(const char *json)
+{
+	cJSON *root = cJSON_Parse(json);
+	if(root == NULL) {
+		LOG("ws room list parse failed");
+		return;
+	}
+
+	ws_room_snapshot_t *snapshot = (ws_room_snapshot_t *)calloc(1, sizeof(ws_room_snapshot_t));
+	if(snapshot == NULL) {
+		cJSON_Delete(root);
+		return;
+	}
+	snapshot->revision = ws_actor_cjson_u32(root, "revision");
+	snapshot->truncated = ws_actor_cjson_bool(root, "truncated");
+	ws_actor_cjson_copy_string(root, "server_time", snapshot->server_time, sizeof(snapshot->server_time));
+
+	cJSON *rooms = cJSON_GetObjectItemCaseSensitive(root, "rooms");
+	if(cJSON_IsArray(rooms)) {
+		cJSON *room = NULL;
+		cJSON_ArrayForEach(room, rooms) {
+			if(snapshot->count >= ROOM_LIST_MAX_COUNT) {
+				snapshot->truncated = true;
+				break;
+			}
+			if(!cJSON_IsObject(room)) {
+				continue;
+			}
+			ws_room_record_t *out = &snapshot->rooms[snapshot->count];
+			ws_actor_cjson_copy_string(room, "id", out->id, sizeof(out->id));
+			ws_actor_cjson_copy_string(room, "name", out->name, sizeof(out->name));
+			out->user_count = ws_actor_cjson_int(room, "user_count");
+			out->locked = ws_actor_cjson_bool(room, "locked");
+			if(out->id[0] == '\0') {
+				continue;
+			}
+			if(out->name[0] == '\0') {
+				strncpy(out->name, out->id, sizeof(out->name) - 1);
+			}
+			snapshot->count++;
+		}
+	}
+
+	esp_err_t update_err = ws_room_cache_update_rooms(snapshot);
+	LOG("ws room list snapshot: revision=%u count=%u truncated=%d server_time=%s update=%s",
+		(unsigned)snapshot->revision,
+		(unsigned)snapshot->count,
+		(int)snapshot->truncated,
+		snapshot->server_time[0] != '\0' ? snapshot->server_time : "-",
+		esp_err_to_name(update_err));
+	if(update_err == ESP_OK) {
+		(void)msg_send_sys_value(MSG_SRC_WS, MSG_EVT_SYS_WS_ROOM_LIST_UPDATED, (int)snapshot->revision, 0);
+	}
+	free(snapshot);
+	cJSON_Delete(root);
+}
+
+static void ws_actor_handle_room_users_snapshot(const char *json)
+{
+	cJSON *root = cJSON_Parse(json);
+	if(root == NULL) {
+		LOG("ws room users parse failed");
+		return;
+	}
+
+	ws_room_users_snapshot_t *snapshot = (ws_room_users_snapshot_t *)calloc(1, sizeof(ws_room_users_snapshot_t));
+	if(snapshot == NULL) {
+		cJSON_Delete(root);
+		return;
+	}
+	snapshot->revision = ws_actor_cjson_u32(root, "revision");
+	snapshot->truncated = ws_actor_cjson_bool(root, "truncated");
+	ws_actor_cjson_copy_string(root, "room", snapshot->room, sizeof(snapshot->room));
+	ws_actor_cjson_copy_string(root, "server_time", snapshot->server_time, sizeof(snapshot->server_time));
+
+	cJSON *users = cJSON_GetObjectItemCaseSensitive(root, "users");
+	if(cJSON_IsArray(users)) {
+		cJSON *user = NULL;
+		cJSON_ArrayForEach(user, users) {
+			if(snapshot->count >= ROOM_USERS_MAX_COUNT) {
+				snapshot->truncated = true;
+				break;
+			}
+			if(!cJSON_IsObject(user)) {
+				continue;
+			}
+			ws_room_user_record_t *out = &snapshot->users[snapshot->count];
+			ws_actor_cjson_copy_string(user, "device_id", out->device_id, sizeof(out->device_id));
+			ws_actor_cjson_copy_string(user, "callsign", out->callsign, sizeof(out->callsign));
+			ws_actor_cjson_copy_string(user, "fw_version", out->fw_version, sizeof(out->fw_version));
+			out->talking = ws_actor_cjson_bool(user, "talking");
+			if(out->callsign[0] == '\0') {
+				strncpy(out->callsign, out->device_id[0] != '\0' ? out->device_id : "unknown", sizeof(out->callsign) - 1);
+			}
+			snapshot->count++;
+		}
+	}
+
+	const char *current_room = app_settings.ws_room[0] != '\0' ? app_settings.ws_room : "default";
+	if(snapshot->room[0] != '\0' && strcmp(snapshot->room, current_room) != 0) {
+		LOG("ws room users ignored: snapshot_room=%s current_room=%s revision=%u count=%u",
+			snapshot->room,
+			current_room,
+			(unsigned)snapshot->revision,
+			(unsigned)snapshot->count);
+		free(snapshot);
+		cJSON_Delete(root);
+		return;
+	}
+
+	esp_err_t update_err = ws_room_cache_update_users(snapshot);
+	LOG("ws room users snapshot: room=%s revision=%u count=%u truncated=%d server_time=%s update=%s",
+		snapshot->room[0] != '\0' ? snapshot->room : "-",
+		(unsigned)snapshot->revision,
+		(unsigned)snapshot->count,
+		(int)snapshot->truncated,
+		snapshot->server_time[0] != '\0' ? snapshot->server_time : "-",
+		esp_err_to_name(update_err));
+	for(size_t i = 0; i < snapshot->count && i < 4; i++) {
+		LOG("ws room user[%u]: callsign=%s device=%s talking=%d fw=%s",
+			(unsigned)i,
+			snapshot->users[i].callsign,
+			snapshot->users[i].device_id,
+			(int)snapshot->users[i].talking,
+			snapshot->users[i].fw_version);
+	}
+	if(update_err == ESP_OK) {
+		(void)msg_send_sys_value(MSG_SRC_WS, MSG_EVT_SYS_WS_ROOM_USERS_UPDATED, (int)snapshot->revision, 0);
+	}
+	free(snapshot);
+	cJSON_Delete(root);
+}
+#endif
 
 static void ws_actor_handle_ws_data(const ws_client_event_t *event)
 {
@@ -771,11 +1089,37 @@ static void ws_actor_handle_ws_data(const ws_client_event_t *event)
 
 	char type[32] = {0};
 	if(ws_actor_json_get_string(json, "type", type, sizeof(type)) && strcmp(type, "cw") == 0) {
+		LOG("ws json received: type=cw len=%d", event->data_len);
 		ws_actor_handle_cw_payload(json);
 	} else if(strcmp(type, "intercom_talk_start_ack") == 0) {
 		ws_actor_handle_intercom_talk_ack(json);
 	} else if(strcmp(type, "intercom_talking") == 0) {
 		ws_actor_handle_intercom_talking(json);
+	} else if(strcmp(type, "room_list") == 0) {
+#if INTERCOM_ROOM_SYNC_ENABLE
+		if(s_actor.intercom_tx_active) {
+			free(json);
+			return;
+		}
+		ws_actor_handle_room_list_snapshot(json);
+#else
+		LOG("ws room list ignored: room sync disabled len=%d", event->data_len);
+#endif
+	} else if(strcmp(type, "room_users") == 0) {
+#if INTERCOM_ROOM_SYNC_ENABLE
+		if(s_actor.intercom_tx_active) {
+			free(json);
+			return;
+		}
+		ws_actor_handle_room_users_snapshot(json);
+#else
+		LOG("ws room users ignored: room sync disabled len=%d", event->data_len);
+#endif
+	} else if(s_actor.intercom_tx_active &&
+			  (strcmp(type, "intercom_audio_diag") == 0 || strcmp(type, "pong") == 0)) {
+		/* Keep the audio transmit window free of diagnostic/UI-only work. */
+	} else {
+		LOG("ws json ignored: type=%s len=%d", type[0] != '\0' ? type : "-", event->data_len);
 	}
 
 	free(json);
@@ -944,11 +1288,51 @@ static void ws_actor_apply_msg(const msg_t *msg)
 			ws_actor_send_cw();
 			break;
 
+		case MSG_EVT_CMD_WS_ROOM_LIST_REQ:
+#if INTERCOM_ROOM_SYNC_ENABLE
+			if(s_actor.intercom_tx_active) {
+				break;
+			}
+			ws_actor_send_room_list_req();
+#else
+			LOG("ws room list request ignored: room sync disabled");
+#endif
+			break;
+
+		case MSG_EVT_CMD_WS_ROOM_USERS_REQ:
+#if INTERCOM_ROOM_SYNC_ENABLE
+			if(s_actor.intercom_tx_active) {
+				break;
+			}
+			ws_actor_send_room_users_req();
+#else
+			LOG("ws room users request ignored: room sync disabled");
+#endif
+			break;
+
+		case MSG_EVT_CMD_WS_INTERCOM_ROOM_JOIN:
+#if INTERCOM_ROOM_SYNC_ENABLE
+			ws_actor_send_intercom_room_presence("intercom_room_join");
+#else
+			LOG("ws room join ignored: room sync disabled");
+#endif
+			break;
+
+		case MSG_EVT_CMD_WS_INTERCOM_ROOM_LEAVE:
+#if INTERCOM_ROOM_SYNC_ENABLE
+			ws_actor_send_intercom_room_presence("intercom_room_leave");
+#else
+			LOG("ws room leave ignored: room sync disabled");
+#endif
+			break;
+
 		case MSG_EVT_CMD_WS_INTERCOM_TALK_START:
+			s_actor.intercom_tx_active = true;
 			ws_actor_send_intercom_signal("intercom_talk_start");
 			break;
 
 		case MSG_EVT_CMD_WS_INTERCOM_TALK_STOP:
+			s_actor.intercom_tx_active = false;
 			ws_actor_send_intercom_signal("intercom_talk_stop");
 			break;
 
@@ -962,6 +1346,7 @@ static void ws_actor_apply_msg(const msg_t *msg)
 		case MSG_EVT_SYS_WS_DISCONNECTED:
 			s_actor.next_heartbeat_tick = 0;
 			s_actor.audio_send_consecutive_failures = 0;
+			s_actor.intercom_tx_active = false;
 			s_intercom_audio_tx_batch_count = 0;
 			if(s_actor.state == WS_ACTOR_STATE_BACKOFF || s_actor.state == WS_ACTOR_STATE_WAIT_WIFI) {
 				break;
