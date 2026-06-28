@@ -332,7 +332,19 @@ static void page_home_scroll_msg_bottom(void)
 	}
 
 	lv_obj_update_layout(msg_body);
-	lv_obj_scroll_to_y(msg_body, lv_obj_get_scroll_bottom(msg_body), LV_ANIM_OFF);
+	int32_t y = lv_obj_get_scroll_y(msg_body);
+	int32_t max_y = y + lv_obj_get_scroll_bottom(msg_body);
+	if(max_y < 0) {
+		max_y = 0;
+	}
+	lv_obj_scroll_to_y(msg_body, max_y, LV_ANIM_OFF);
+	lv_obj_update_layout(msg_body);
+	y = lv_obj_get_scroll_y(msg_body);
+	max_y = y + lv_obj_get_scroll_bottom(msg_body);
+	if(max_y < 0) {
+		max_y = 0;
+	}
+	lv_obj_scroll_to_y(msg_body, max_y, LV_ANIM_OFF);
 }
 
 static void page_home_scroll_msg_to_item(lv_obj_t *item)
@@ -343,7 +355,6 @@ static void page_home_scroll_msg_to_item(lv_obj_t *item)
 
 	lv_obj_update_layout(msg_body);
 	lv_obj_update_layout(item);
-	lv_obj_scroll_to_view(item, LV_ANIM_ON);
 	page_home_scroll_msg_bottom();
 }
 

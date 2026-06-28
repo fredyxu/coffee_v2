@@ -549,11 +549,20 @@ static void update_user_list() {
 		user_count = ROOM_USERS_MAX_COUNT;
 	}
 	if(user_count == 0) {
+		const char *callsign = app_settings.user_callsign[0] != '\0' ?
+							   app_settings.user_callsign :
+							   app_settings.ws_callsign;
+		if(callsign == NULL || callsign[0] == '\0') {
+			callsign = USER_DEFAULT_CALLSIGN;
+		}
+		LOG("talk page user list empty from server, showing local fallback: room=%s callsign=%s",
+			s_current_room_id,
+			callsign);
 		lv_obj_t *item = lv_obj_create(obj_user_list);
 		lv_obj_add_style(item, &s_style_item_body, LV_STATE_DEFAULT);
 		lv_obj_t *title_label = lv_label_create(item);
 		lv_obj_add_style(title_label, &s_style_item_title_label, LV_STATE_DEFAULT);
-		lv_label_set_text(title_label, "暂无成员");
+		lv_label_set_text(title_label, callsign);
 		return;
 	}
 
@@ -909,7 +918,8 @@ static void page_talk_msg_handler(const msg_t *msg)
 
 		case MSG_EVT_SYS_WS_CONNECTED:
 #if INTERCOM_ROOM_SYNC_ENABLE
-			LOG("talk page ws connected: request room list/users");
+			LOG("talk page ws connected: join room and request room list/users");
+			(void)msg_send_cmd_value(MSG_SRC_UI, MSG_EVT_CMD_WS_INTERCOM_ROOM_JOIN, 1, 0);
 			page_talk_request_room_snapshots();
 #else
 			LOG("talk page ws connected: room sync disabled");
@@ -1026,9 +1036,9 @@ esp_err_t page_talk_show(lv_obj_t *p) {
 	lv_obj_add_event_cb(obj_ptt_body, ptt_released, LV_EVENT_RELEASED, NULL);
 	lv_obj_add_event_cb(obj_ptt_body, ptt_released, LV_EVENT_PRESS_LOST, NULL);
 
+	page_talk_join_room();
 	update_room_list();
 	update_user_list();
-	page_talk_join_room();
 
 
 	ptt_set_status(PTT_STATUS_IDLE);

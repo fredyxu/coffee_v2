@@ -1698,6 +1698,12 @@ static void ws_actor_apply_msg(const msg_t *msg)
 			s_actor.audio_send_consecutive_failures = 0;
 			ws_actor_schedule_heartbeat();
 			ws_actor_set_state(WS_ACTOR_STATE_CONNECTED);
+#if INTERCOM_ROOM_SYNC_ENABLE
+			if(s_actor.intercom_room_joined) {
+				LOG("ws connected: resend intercom room join presence");
+				ws_actor_send_intercom_room_presence("intercom_room_join");
+			}
+#endif
 			break;
 
 		case MSG_EVT_SYS_WS_DISCONNECTED:
