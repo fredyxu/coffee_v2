@@ -10,7 +10,7 @@
  * 1：启用完整房间/成员快照同步。
  */
 #ifndef INTERCOM_ROOM_SYNC_ENABLE
-#define INTERCOM_ROOM_SYNC_ENABLE 0
+#define INTERCOM_ROOM_SYNC_ENABLE 1
 #endif
 
 #define ROOM_LIST_MAX_COUNT 32

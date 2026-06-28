@@ -1662,7 +1662,7 @@ static void ws_actor_apply_msg(const msg_t *msg)
 #if INTERCOM_ROOM_SYNC_ENABLE
 			ws_actor_send_intercom_room_presence("intercom_room_join");
 #else
-			LOG("ws room join presence skipped: room sync disabled");
+			// LOG("ws room join presence skipped: room sync disabled");
 #endif
 			break;
 
@@ -1674,13 +1674,13 @@ static void ws_actor_apply_msg(const msg_t *msg)
 #if INTERCOM_ROOM_SYNC_ENABLE
 			ws_actor_send_intercom_room_presence("intercom_room_leave");
 #else
-			LOG("ws room leave presence skipped: room sync disabled");
+			// LOG("ws room leave presence skipped: room sync disabled");
 #endif
 			break;
 
 		case MSG_EVT_CMD_WS_INTERCOM_TALK_START:
 			if(!s_actor.intercom_room_joined) {
-				LOG("ws intercom talk start ignored: not in intercom room");
+				// LOG("ws intercom talk start ignored: not in intercom room");
 				break;
 			}
 			ws_actor_stop_intercom_rx_audio("local_talk_start");
