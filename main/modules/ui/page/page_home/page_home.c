@@ -652,7 +652,7 @@ static void page_home_input_handler(const msg_t *msg)
 	// 长按编码器进入设置页面
     if(msg->event == MSG_EVT_INPUT_ENCODER_LONG_PRESS) {
         ui_nav_go((ui_page_nav_param_t) {
-            .page_id = PAGE_SETTINGS,
+            .page_id = PAGE_MENU,
         });
 		return;
     }
