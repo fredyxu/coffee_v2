@@ -12,37 +12,37 @@ GPIO -> 按键 -> GND
 启用内部上拉
 */
 
-#define PIN_KEY_A              1
-#define PIN_KEY_B              2
+#define PIN_KEY_A              1    // KEY_A / K1 / A / PADDLE_A / DOT
+#define PIN_KEY_B              2    // KEY_B / K2 / B / PADDLE_B / DASH
 
 
 /* ============================================================
  * 📺 LCD 控制引脚（I80接口）
  * ============================================================ */
-#define PIN_LCD_DC                 9
-#define PIN_LCD_WR                 8
-#define PIN_LCD_CS                 10
-#define PIN_LCD_RST                21
-#define PIN_LCD_BL                 11
+#define PIN_LCD_DC                 9    // DC / RS / A0 / CD / D-C
+#define PIN_LCD_WR                 8    // WR / WRX / W/R / LCD_WR / PCLK
+#define PIN_LCD_CS                 10   // CS / CSX / LCD_CS / CE / SS
+#define PIN_LCD_RST                21   // RST / RES / RESET / LCD_RST
+#define PIN_LCD_BL                 11   // BL / BLK / BKL / LED / LCD_BL
 
-// LCD 数据总线引脚 D0-D7
-#define PIN_LCD_D0                 4
-#define PIN_LCD_D1                 5
-#define PIN_LCD_D2                 6
-#define PIN_LCD_D3                 7
-#define PIN_LCD_D4                 12
-#define PIN_LCD_D5                 13
-#define PIN_LCD_D6                 14
-#define PIN_LCD_D7                 15
+// ESP 侧 8-bit I80 数据总线。转接板把这 8 条线接到 LCD 的高八位 DB8-DB15。
+#define PIN_LCD_D0                 4    // LCD DB8
+#define PIN_LCD_D1                 5    // LCD DB9
+#define PIN_LCD_D2                 6    // LCD DB10
+#define PIN_LCD_D3                 7    // LCD DB11
+#define PIN_LCD_D4                 12   // LCD DB12
+#define PIN_LCD_D5                 13   // LCD DB13
+#define PIN_LCD_D6                 14   // LCD DB14
+#define PIN_LCD_D7                 15   // LCD DB15
 
 
 /* ============================================================
  * 🖐️ 触控（I2C）
  * ============================================================ */
-#define PIN_TOUCH_SDA              18
-#define PIN_TOUCH_SCL              47
-#define PIN_TOUCH_INT              17
-#define PIN_TOUCH_RST              16
+#define PIN_TOUCH_SDA              18   // SDA / TP_SDA / T_SDA / CTP_SDA / TSDI
+#define PIN_TOUCH_SCL              47   // SCL / SCK / TP_SCL / T_SCL / CTP_SCL /TCLK
+#define PIN_TOUCH_INT              17   // INT / IRQ / TP_INT / T_IRQ / CTP_INT / TPEN
+#define PIN_TOUCH_RST              16   // RST / RES / RESET / TP_RST / CTP_RST / TCS
 
 
 /* ============================================================
@@ -63,9 +63,9 @@ EC11 引脚说明：
 - 旋转方向反了只需交换 A/B
 */
 
-#define PIN_ENCODER_A              38   // EC11：A相（旋转信号）
-#define PIN_ENCODER_B              39   // EC11：B相（旋转信号）
-#define PIN_ENCODER_SW             40   // EC11：按键（SW）
+#define PIN_ENCODER_A              38   // A / CLK / S1 / EC11_A / ROT_A
+#define PIN_ENCODER_B              39   // B / DT / S2 / EC11_B / ROT_B
+#define PIN_ENCODER_SW             40   // SW / KEY / BTN / EC11_SW / ROT_SW
 
 
 /* ============================================================
@@ -82,9 +82,9 @@ VIN  → 电源
 GND  → 地
 */
 
-#define PIN_SOUND_I2S_BCLK         41   // → BCLK
-#define PIN_SOUND_I2S_WS           42   // → LRC (WS / LRCLK)
-#define PIN_SOUND_I2S_DOUT         19   // → DIN
+#define PIN_SOUND_I2S_BCLK         41   // BCLK / BCK / SCK / I2S_BCLK
+#define PIN_SOUND_I2S_WS           42   // LRC / LRCLK / WS / WSEL / I2S_WS
+#define PIN_SOUND_I2S_DOUT         19   // DIN / SDIN / DATA / I2S_DIN
 
 // I2S 配置（输出）
 // 采样率 / DMA / 任务优先级等系统参数请配置在 config_sys.h
@@ -106,9 +106,9 @@ GND → 地
 - L/R → GND（左声道，推荐）
 */
 
-#define PIN_MIC_I2S_BCLK           35   // → SCK
-#define PIN_MIC_I2S_WS             36   // → WS
-#define PIN_MIC_I2S_DIN            37   // → SD
+#define PIN_MIC_I2S_BCLK           35   // SCK / BCLK / BCK / I2S_SCK
+#define PIN_MIC_I2S_WS             36   // WS / LRCLK / LRC / I2S_WS
+#define PIN_MIC_I2S_DIN            37   // SD / DOUT / DATA / I2S_SD
 
 /* ============================================================
  * ⚠️ GPIO 能力说明（ESP32-S3）

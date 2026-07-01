@@ -33,6 +33,16 @@ static SemaphoreHandle_t s_lock = NULL;
 static TaskHandle_t s_lvgl_task = NULL;
 static lvgl_dma_ctx_t s_dma = {0};
 
+static uint8_t lvgl_port_touch_orientation(void)
+{
+#if (CONFIG_LCD_PANEL_CTRL == 0)
+    if(CONFIG_LCD_LANDSCAPE_DIR == 1) {
+        return 2;
+    }
+#endif
+    return 0;
+}
+
 static bool IRAM_ATTR lvgl_flush_done_cb(esp_lcd_panel_io_handle_t io,
                                          esp_lcd_panel_io_event_data_t *edata,
                                          void *user_ctx)
@@ -221,7 +231,7 @@ esp_err_t lvgl_port_init(esp_lcd_panel_io_handle_t io)
     lv_indev_t *touch_indev = NULL;
     err = touch_lvgl_bind(s_disp, &touch_indev);
     if(err == ESP_OK) {
-        (void)touch_set_orientation(0, s_disp);
+        (void)touch_set_orientation(lvgl_port_touch_orientation(), s_disp);
     } else {
         LOG("touch bind failed, continue without touch: %s", esp_err_to_name(err));
     }

@@ -1,4 +1,5 @@
 #include "lcd_i80_8.h"
+#include "lcd_i80_8_panel.h"
 
 #include "driver/gpio.h"
 #include "driver/ledc.h"
@@ -13,19 +14,28 @@
 
 // 性能配置 (同display_i80_8.c)
 #define I80_PERF_PROFILE           2
+#define I80_BUS_WIDTH              8
 
-#if (I80_PERF_PROFILE == 0)
+#if (CONFIG_LCD_PANEL_CTRL == 0 && CONFIG_LCD_ILI9341_TIMING_PROFILE == 1)
+#define I80_PCLK_HZ                (10 * 1000 * 1000)
+#define I80_TRANS_QUEUE_DEPTH      12
+#define I80_DRAW_BUF_LINES         50
+#define I80_TRANSFER_BYTES_PER_PIXEL DISPLAY_COLOR_BYTES_PER_PIXEL
+#elif (I80_PERF_PROFILE == 0)
 #define I80_PCLK_HZ                (8 * 1000 * 1000)
 #define I80_TRANS_QUEUE_DEPTH      12
 #define I80_DRAW_BUF_LINES         50
+#define I80_TRANSFER_BYTES_PER_PIXEL DISPLAY_COLOR_BYTES_PER_PIXEL
 #elif (I80_PERF_PROFILE == 1)
 #define I80_PCLK_HZ                (16 * 1000 * 1000)
 #define I80_TRANS_QUEUE_DEPTH      18
 #define I80_DRAW_BUF_LINES         80
+#define I80_TRANSFER_BYTES_PER_PIXEL DISPLAY_COLOR_BYTES_PER_PIXEL
 #elif (I80_PERF_PROFILE == 2)
 #define I80_PCLK_HZ                (20 * 1000 * 1000)
 #define I80_TRANS_QUEUE_DEPTH      24
 #define I80_DRAW_BUF_LINES         100
+#define I80_TRANSFER_BYTES_PER_PIXEL DISPLAY_COLOR_BYTES_PER_PIXEL
 #endif
 
 
@@ -36,7 +46,13 @@
 
 // 颜色配置
 #define I80_LCD_BGR_ORDER          0
+#if (CONFIG_LCD_PANEL_CTRL == 0)
 #define I80_IO_SWAP_COLOR_BYTES    1
+#define I80_IO_PCLK_ACTIVE_NEG     0
+#else
+#define I80_IO_SWAP_COLOR_BYTES    1
+#define I80_IO_PCLK_ACTIVE_NEG     0
+#endif
 
 // 背光配置
 #define BL_LEDC_MODE                LEDC_LOW_SPEED_MODE
@@ -46,21 +62,17 @@
 #define BL_LEDC_RESOLUTION          LEDC_TIMER_10_BIT
 #define BL_LEDC_MAX_DUTY            ((1 << 10) - 1)
 
+#if (CONFIG_LCD_PANEL_CTRL == 0)
+#define LCD_RESET_LOW_MS            120
+#define LCD_RESET_POST_MS           250
+#else
+#define LCD_RESET_LOW_MS            20
+#define LCD_RESET_POST_MS           120
+#endif
+
 static esp_lcd_panel_io_handle_t s_io = NULL;
 static bool s_backlight_ready = false;
 static size_t s_max_transfer_bytes = 0;
-
-// LCD命令定义
-#define LCD_CMD_SWRESET            0x01
-#define LCD_CMD_SLPOUT             0x11
-#define LCD_CMD_DISPON             0x29
-#define LCD_CMD_CASET              0x2A
-#define LCD_CMD_PASET              0x2B
-#define LCD_CMD_RAMWR              0x2C
-#define LCD_CMD_MADCTL             0x36
-#define LCD_CMD_COLMOD             0x3A
-#define LCD_CMD_INVON              0x21
-#define LCD_CMD_INVOFF             0x20
 
 // MADCTL位
 #define LCD_MADCTL_MY              0x80
@@ -75,13 +87,33 @@ static bool log_init_error(esp_err_t err, const char *step)
     return true;
 }
 
-static void panel_write_cmd(uint8_t cmd)
+static void fill_i80_data_gpio_nums(int *data_gpio_nums)
+{
+    data_gpio_nums[0] = PIN_LCD_D0;
+    data_gpio_nums[1] = PIN_LCD_D1;
+    data_gpio_nums[2] = PIN_LCD_D2;
+    data_gpio_nums[3] = PIN_LCD_D3;
+    data_gpio_nums[4] = PIN_LCD_D4;
+    data_gpio_nums[5] = PIN_LCD_D5;
+    data_gpio_nums[6] = PIN_LCD_D6;
+    data_gpio_nums[7] = PIN_LCD_D7;
+}
+
+static void lcd_i80_hardware_reset(void)
+{
+    gpio_set_level(PIN_LCD_RST, 0);
+    vTaskDelay(pdMS_TO_TICKS(LCD_RESET_LOW_MS));
+    gpio_set_level(PIN_LCD_RST, 1);
+    vTaskDelay(pdMS_TO_TICKS(LCD_RESET_POST_MS));
+}
+
+void lcd_i80_panel_write_cmd(uint8_t cmd)
 {
     if(s_io == NULL) return;
     esp_lcd_panel_io_tx_param(s_io, cmd, NULL, 0);
 }
 
-static void panel_write_data(uint8_t cmd, const uint8_t *data, size_t len)
+void lcd_i80_panel_write_data(uint8_t cmd, const uint8_t *data, size_t len)
 {
     if(s_io == NULL) return;
     esp_lcd_panel_io_tx_param(s_io, cmd, data, len);
@@ -94,13 +126,13 @@ static void set_window(int x1, int y1, int x2, int y2)
     buf[1] = x1 & 0xFF;
     buf[2] = (x2 >> 8) & 0xFF;
     buf[3] = x2 & 0xFF;
-    panel_write_data(LCD_CMD_CASET, buf, 4);
+    lcd_i80_panel_write_data(LCD_CMD_CASET, buf, 4);
 
     buf[0] = (y1 >> 8) & 0xFF;
     buf[1] = y1 & 0xFF;
     buf[2] = (y2 >> 8) & 0xFF;
     buf[3] = y2 & 0xFF;
-    panel_write_data(LCD_CMD_PASET, buf, 4);
+    lcd_i80_panel_write_data(LCD_CMD_PASET, buf, 4);
 }
 
 static bool panel_flags_to_rot_idx(bool swap_xy, bool mirror_x, bool mirror_y, uint8_t *out_idx)
@@ -162,136 +194,31 @@ static void panel_apply_orientation(uint8_t orientation)
     if(mirror_x) madctl |= LCD_MADCTL_MX;
     if(mirror_y) madctl |= LCD_MADCTL_MY;
     if(I80_LCD_BGR_ORDER) madctl |= LCD_MADCTL_BGR;
-    panel_write_data(LCD_CMD_MADCTL, &madctl, 1);
+    lcd_i80_panel_write_data(LCD_CMD_MADCTL, &madctl, 1);
 
     // LOG("orientation=%u (MADCTL=0x%02X)", (unsigned)ori, madctl);
 }
 
-static void ili9341_init_sequence(void)
+void lcd_i80_panel_apply_landscape_dir(void)
 {
-    // Software reset
-    panel_write_cmd(LCD_CMD_SWRESET);
-    vTaskDelay(pdMS_TO_TICKS(150));
-
-    // Power control
-    {
-        const uint8_t data_cf[] = {0x00, 0xC1, 0x30};
-        panel_write_data(0xCF, data_cf, sizeof(data_cf));
-        const uint8_t data_ed[] = {0x64, 0x03, 0x12, 0x81};
-        panel_write_data(0xED, data_ed, sizeof(data_ed));
-        const uint8_t data_e8[] = {0x85, 0x00, 0x78};
-        panel_write_data(0xE8, data_e8, sizeof(data_e8));
-        const uint8_t data_cb[] = {0x39, 0x2C, 0x00, 0x34, 0x02};
-        panel_write_data(0xCB, data_cb, sizeof(data_cb));
-        const uint8_t data_f7[] = {0x20};
-        panel_write_data(0xF7, data_f7, sizeof(data_f7));
-        const uint8_t data_ea[] = {0x00, 0x00};
-        panel_write_data(0xEA, data_ea, sizeof(data_ea));
-        const uint8_t data_c0[] = {0x23};
-        panel_write_data(0xC0, data_c0, sizeof(data_c0));
-        const uint8_t data_c1[] = {0x10};
-        panel_write_data(0xC1, data_c1, sizeof(data_c1));
-        const uint8_t data_c5[] = {0x3E, 0x28};
-        panel_write_data(0xC5, data_c5, sizeof(data_c5));
-        const uint8_t data_c7[] = {0x86};
-        panel_write_data(0xC7, data_c7, sizeof(data_c7));
+    uint8_t orientation = 0;
+    if(CONFIG_LCD_LANDSCAPE_DIR == 1) {
+        orientation = 2;
+    } else if(CONFIG_LCD_LANDSCAPE_DIR != 0) {
+        LOG("invalid CONFIG_LCD_LANDSCAPE_DIR=%d, fallback to normal", CONFIG_LCD_LANDSCAPE_DIR);
     }
-
-    panel_apply_orientation(0);
-
-    {
-        const uint8_t data_3a[] = {0x55};
-        panel_write_data(LCD_CMD_COLMOD, data_3a, sizeof(data_3a));
-    }
-
-    {
-        const uint8_t data_b1[] = {0x00, 0x18};
-        panel_write_data(0xB1, data_b1, sizeof(data_b1));
-        const uint8_t data_b6[] = {0x08, 0x82, 0x27};
-        panel_write_data(0xB6, data_b6, sizeof(data_b6));
-    }
-
-    if(CONFIG_LCD_INVERT_COLOR) {
-        panel_write_cmd(LCD_CMD_INVON);
-    } else {
-        panel_write_cmd(LCD_CMD_INVOFF);
-    }
-
-    panel_write_cmd(LCD_CMD_SLPOUT);
-    vTaskDelay(pdMS_TO_TICKS(120));
-    panel_write_cmd(LCD_CMD_DISPON);
-    vTaskDelay(pdMS_TO_TICKS(20));
+    panel_apply_orientation(orientation);
 }
 
-static void st7798_init_sequence(void)
+void lcd_i80_panel_apply_madctl(uint8_t normal, uint8_t reverse)
 {
-    panel_write_cmd(LCD_CMD_SWRESET);
-    vTaskDelay(pdMS_TO_TICKS(150));
-
-    // 启用命令集扩展
-    {
-        const uint8_t f0_c3[] = {0xC3};
-        const uint8_t f0_96[] = {0x96};
-        panel_write_data(0xF0, f0_c3, sizeof(f0_c3));
-        panel_write_data(0xF0, f0_96, sizeof(f0_96));
+    uint8_t madctl = normal;
+    if(CONFIG_LCD_LANDSCAPE_DIR == 1) {
+        madctl = reverse;
+    } else if(CONFIG_LCD_LANDSCAPE_DIR != 0) {
+        LOG("invalid CONFIG_LCD_LANDSCAPE_DIR=%d, fallback to normal", CONFIG_LCD_LANDSCAPE_DIR);
     }
-
-    {
-        const uint8_t b4[] = {0x01};
-        const uint8_t b7[] = {0xC6};
-        const uint8_t c1[] = {0x06};
-        const uint8_t c2[] = {0xA7};
-        const uint8_t c5[] = {0x18};
-        panel_write_data(0xB4, b4, sizeof(b4));
-        panel_write_data(0xB7, b7, sizeof(b7));
-        panel_write_data(0xC1, c1, sizeof(c1));
-        panel_write_data(0xC2, c2, sizeof(c2));
-        panel_write_data(0xC5, c5, sizeof(c5));
-    }
-
-    {
-        const uint8_t e8[] = {0x40, 0x8A, 0x00, 0x00, 0x29, 0x19, 0xA5, 0x33};
-        panel_write_data(0xE8, e8, sizeof(e8));
-    }
-
-    panel_apply_orientation(0);
-
-    {
-        const uint8_t colmod[] = {0x55};
-        panel_write_data(LCD_CMD_COLMOD, colmod, sizeof(colmod));
-    }
-
-    {
-        const uint8_t e0[] = {
-            0xF0, 0x09, 0x0B, 0x06, 0x04, 0x15, 0x2F, 0x54,
-            0x42, 0x3C, 0x17, 0x14, 0x18, 0x1B
-        };
-        const uint8_t e1[] = {
-            0xE0, 0x09, 0x0B, 0x06, 0x04, 0x03, 0x2B, 0x43,
-            0x42, 0x3B, 0x16, 0x14, 0x17, 0x1B
-        };
-        panel_write_data(0xE0, e0, sizeof(e0));
-        panel_write_data(0xE1, e1, sizeof(e1));
-    }
-
-    if(CONFIG_LCD_INVERT_COLOR) {
-        panel_write_cmd(LCD_CMD_INVON);
-    } else {
-        panel_write_cmd(LCD_CMD_INVOFF);
-    }
-
-    // Lock command set extension
-    {
-        const uint8_t f0_3c[] = {0x3C};
-        const uint8_t f0_69[] = {0x69};
-        panel_write_data(0xF0, f0_3c, sizeof(f0_3c));
-        panel_write_data(0xF0, f0_69, sizeof(f0_69));
-    }
-
-    panel_write_cmd(LCD_CMD_SLPOUT);
-    vTaskDelay(pdMS_TO_TICKS(120));
-    panel_write_cmd(LCD_CMD_DISPON);
-    vTaskDelay(pdMS_TO_TICKS(20));
+    lcd_i80_panel_write_data(LCD_CMD_MADCTL, &madctl, 1);
 }
 
 static esp_err_t backlight_init(void)
@@ -409,13 +336,17 @@ esp_err_t lcd_i80_8_init(void)
         return ESP_FAIL;
     }
 
+#if (CONFIG_LCD_PANEL_CTRL == 0)
+    (void)lcd_set_backlight(0);
+    gpio_set_level(PIN_LCD_RST, 0);
+    vTaskDelay(pdMS_TO_TICKS(20));
+#else
     (void)lcd_set_backlight(100);
     gpio_set_level(PIN_LCD_RST, 1);
+#endif
 
-    const int data_gpio_nums[8] = {
-        PIN_LCD_D0, PIN_LCD_D1, PIN_LCD_D2, PIN_LCD_D3,
-        PIN_LCD_D4, PIN_LCD_D5, PIN_LCD_D6, PIN_LCD_D7,
-    };
+    int data_gpio_nums[I80_BUS_WIDTH] = {0};
+    fill_i80_data_gpio_nums(data_gpio_nums);
 
     esp_lcd_i80_bus_handle_t i80_bus = NULL;
     esp_lcd_panel_io_handle_t io_handle = NULL;
@@ -425,11 +356,11 @@ esp_err_t lcd_i80_8_init(void)
         .wr_gpio_num = PIN_LCD_WR,
         .clk_src = LCD_CLK_SRC_DEFAULT,
         .data_gpio_nums = {0},
-        .bus_width = 8,
-        .max_transfer_bytes = DISPLAY_H_RES * LVGL_DRAW_BUF_LINES * DISPLAY_COLOR_BYTES_PER_PIXEL,
+        .bus_width = I80_BUS_WIDTH,
+        .max_transfer_bytes = DISPLAY_H_RES * LVGL_DRAW_BUF_LINES * I80_TRANSFER_BYTES_PER_PIXEL,
         .dma_burst_size = 64,
     };
-    for(int i = 0; i < 8; i++) {
+    for(int i = 0; i < I80_BUS_WIDTH; i++) {
         bus_config.data_gpio_nums[i] = data_gpio_nums[i];
     }
     if(log_init_error(esp_lcd_new_i80_bus(&bus_config, &i80_bus), "esp_lcd_new_i80_bus")) {
@@ -452,7 +383,7 @@ esp_err_t lcd_i80_8_init(void)
         },
         .flags = {
             .swap_color_bytes = I80_IO_SWAP_COLOR_BYTES,
-            .pclk_active_neg = 0,
+            .pclk_active_neg = I80_IO_PCLK_ACTIVE_NEG,
             .pclk_idle_low = 0,
         },
     };
@@ -464,22 +395,13 @@ esp_err_t lcd_i80_8_init(void)
     s_max_transfer_bytes = bus_config.max_transfer_bytes;
 
     // Hardware reset
-    gpio_set_level(PIN_LCD_RST, 0);
-    vTaskDelay(pdMS_TO_TICKS(20));
-    gpio_set_level(PIN_LCD_RST, 1);
-    vTaskDelay(pdMS_TO_TICKS(120));
+    lcd_i80_hardware_reset();
 
-    if(CONFIG_LCD_PANEL_CTRL == 0) {
-        // LOG("panel init: ILI9341");
-        ili9341_init_sequence();
-    } else if(CONFIG_LCD_PANEL_CTRL == 1) {
-        // LOG("panel init: ST7798/ST7796S");
-        st7798_init_sequence();
-    } else {
-        // LOG("invalid CONFIG_LCD_PANEL_CTRL=%d", CONFIG_LCD_PANEL_CTRL);
-        return ESP_FAIL;
-    }
-
-    // LOG("LCD INIT DONE (pclk=%dHz)", I80_PCLK_HZ);
-    return ESP_OK;
+#if (CONFIG_LCD_PANEL_CTRL == 0)
+    return lcd_panel_ili9341_init();
+#elif (CONFIG_LCD_PANEL_CTRL == 1)
+    return lcd_panel_st7798_init();
+#else
+#error "Invalid CONFIG_LCD_PANEL_CTRL: 0=ILI9341, 1=ST7798"
+#endif
 }

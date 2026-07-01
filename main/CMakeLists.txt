@@ -19,6 +19,8 @@ file(GLOB SRC_FILES
 
 list(APPEND SRC_FILES
 		"core/msg/msg_sub.c"
+		"modules/display/lcd_panel_ili9341.c"
+		"modules/display/lcd_panel_st7798.c"
 		"modules/ws/ws_cw_cache.c"
 )
 list(REMOVE_DUPLICATES SRC_FILES)

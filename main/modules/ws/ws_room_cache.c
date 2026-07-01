@@ -96,10 +96,10 @@ esp_err_t ws_room_cache_update_rooms(const ws_room_snapshot_t *snapshot)
 		ws_room_cache_copy_text(s_rooms.rooms[0].id, sizeof(s_rooms.rooms[0].id), "default");
 		ws_room_cache_copy_text(s_rooms.rooms[0].name, sizeof(s_rooms.rooms[0].name), "大厅");
 	}
-	LOG("ws room cache updated rooms: revision=%u count=%u truncated=%d",
-		(unsigned)s_rooms.revision,
-		(unsigned)s_rooms.count,
-		(int)s_rooms.truncated);
+	// LOG("ws room cache updated rooms: revision=%u count=%u truncated=%d",
+	// 	(unsigned)s_rooms.revision,
+	// 	(unsigned)s_rooms.count,
+	// 	(int)s_rooms.truncated);
 
 	ws_room_cache_give();
 	return ESP_OK;

@@ -57,6 +57,11 @@ esp_err_t app_startup(void) {
 	(void)lcd_set_backlight((uint8_t)app_settings.display_brightness);
 	app_init_report_info("屏幕初始化完成.");
 
+#if CONFIG_LCD_COLOR_TEST_ONLY
+	lcd_test_color();
+	app_init_report_info("LCD色条自检模式.");
+	return ESP_OK;
+#endif
 
 	// 初始化屏幕触控
 	err = touch_init();

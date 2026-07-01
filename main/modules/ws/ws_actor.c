@@ -1322,12 +1322,12 @@ static void ws_actor_handle_room_list_snapshot(const char *json)
 	}
 
 	esp_err_t update_err = ws_room_cache_update_rooms(snapshot);
-	LOG("ws room list snapshot: revision=%u count=%u truncated=%d server_time=%s update=%s",
-		(unsigned)snapshot->revision,
-		(unsigned)snapshot->count,
-		(int)snapshot->truncated,
-		snapshot->server_time[0] != '\0' ? snapshot->server_time : "-",
-		esp_err_to_name(update_err));
+	// LOG("ws room list snapshot: revision=%u count=%u truncated=%d server_time=%s update=%s",
+	// 	(unsigned)snapshot->revision,
+	// 	(unsigned)snapshot->count,
+	// 	(int)snapshot->truncated,
+	// 	snapshot->server_time[0] != '\0' ? snapshot->server_time : "-",
+	// 	esp_err_to_name(update_err));
 	if(update_err == ESP_OK) {
 		(void)msg_send_sys_value(MSG_SRC_WS, MSG_EVT_SYS_WS_ROOM_LIST_UPDATED, (int)snapshot->revision, 0);
 	}
