@@ -1,6 +1,6 @@
 # ZClub Coffee
 
-ZClub Coffee 是一个基于 ESP32-S3 和 LVGL 的电码练习通信终端，支持电键输入、摩斯码显示。可以通过WiFi联网实现模拟通信。
+ZClub Coffee 是一个基于 ESP32-S3 和 LVGL 的电码练习通信终端，支持电键输入、摩斯码显示。可以通过WiFi联网实现模拟通信和网络对讲功能。
 
 
 
