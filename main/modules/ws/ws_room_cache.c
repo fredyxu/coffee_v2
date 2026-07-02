@@ -1,5 +1,6 @@
 #include "modules/ws/ws_room_cache.h"
 
+#include <inttypes.h>
 #include <string.h>
 
 #include "core/utils/log.h"
@@ -64,6 +65,22 @@ static void ws_room_cache_copy_text(char *dst, size_t dst_size, const char *src)
 	dst[dst_size - 1] = '\0';
 }
 
+static bool ws_room_cache_is_stale(const char *incoming_epoch,
+								   uint64_t incoming_revision,
+								   const char *current_epoch,
+								   uint64_t current_revision)
+{
+	const bool incoming_has_epoch = incoming_epoch != NULL && incoming_epoch[0] != '\0';
+	const bool current_has_epoch = current_epoch != NULL && current_epoch[0] != '\0';
+	if(incoming_has_epoch && current_has_epoch && strcmp(incoming_epoch, current_epoch) != 0) {
+		return false;
+	}
+	if(incoming_has_epoch && !current_has_epoch) {
+		return false;
+	}
+	return incoming_revision != 0 && incoming_revision <= current_revision;
+}
+
 esp_err_t ws_room_cache_update_rooms(const ws_room_snapshot_t *snapshot)
 {
 	if(snapshot == NULL) {
@@ -72,16 +89,19 @@ esp_err_t ws_room_cache_update_rooms(const ws_room_snapshot_t *snapshot)
 	if(!ws_room_cache_take()) {
 		return ESP_ERR_INVALID_STATE;
 	}
-	if(snapshot->revision != 0 && snapshot->revision <= s_rooms.revision) {
-		LOG("ws room cache reject rooms: incoming_revision=%u current_revision=%u count=%u",
-			(unsigned)snapshot->revision,
-			(unsigned)s_rooms.revision,
+	if(ws_room_cache_is_stale(snapshot->server_epoch, snapshot->revision, s_rooms.server_epoch, s_rooms.revision)) {
+		LOG("ws room cache reject rooms: incoming_epoch=%s current_epoch=%s incoming_revision=%" PRIu64 " current_revision=%" PRIu64 " count=%u",
+			snapshot->server_epoch[0] != '\0' ? snapshot->server_epoch : "-",
+			s_rooms.server_epoch[0] != '\0' ? s_rooms.server_epoch : "-",
+			snapshot->revision,
+			s_rooms.revision,
 			(unsigned)snapshot->count);
 		ws_room_cache_give();
 		return ESP_ERR_INVALID_STATE;
 	}
 
 	memset(&s_rooms, 0, sizeof(s_rooms));
+	ws_room_cache_copy_text(s_rooms.server_epoch, sizeof(s_rooms.server_epoch), snapshot->server_epoch);
 	s_rooms.revision = snapshot->revision;
 	s_rooms.truncated = snapshot->truncated;
 	ws_room_cache_copy_text(s_rooms.server_time, sizeof(s_rooms.server_time), snapshot->server_time);
@@ -96,8 +116,9 @@ esp_err_t ws_room_cache_update_rooms(const ws_room_snapshot_t *snapshot)
 		ws_room_cache_copy_text(s_rooms.rooms[0].id, sizeof(s_rooms.rooms[0].id), "default");
 		ws_room_cache_copy_text(s_rooms.rooms[0].name, sizeof(s_rooms.rooms[0].name), "大厅");
 	}
-	// LOG("ws room cache updated rooms: revision=%u count=%u truncated=%d",
-	// 	(unsigned)s_rooms.revision,
+	// LOG("ws room cache updated rooms: epoch=%s revision=%" PRIu64 " count=%u truncated=%d",
+	// 	s_rooms.server_epoch[0] != '\0' ? s_rooms.server_epoch : "-",
+	// 	s_rooms.revision,
 	// 	(unsigned)s_rooms.count,
 	// 	(int)s_rooms.truncated);
 
@@ -113,18 +134,21 @@ esp_err_t ws_room_cache_update_users(const ws_room_users_snapshot_t *snapshot)
 	if(!ws_room_cache_take()) {
 		return ESP_ERR_INVALID_STATE;
 	}
-	if(snapshot->revision != 0 && snapshot->revision <= s_users.revision &&
+	if(ws_room_cache_is_stale(snapshot->server_epoch, snapshot->revision, s_users.server_epoch, s_users.revision) &&
 	   strcmp(snapshot->room, s_users.room) == 0) {
-		LOG("ws room cache reject users: room=%s incoming_revision=%u current_revision=%u count=%u",
+		LOG("ws room cache reject users: room=%s incoming_epoch=%s current_epoch=%s incoming_revision=%" PRIu64 " current_revision=%" PRIu64 " count=%u",
 			snapshot->room,
-			(unsigned)snapshot->revision,
-			(unsigned)s_users.revision,
+			snapshot->server_epoch[0] != '\0' ? snapshot->server_epoch : "-",
+			s_users.server_epoch[0] != '\0' ? s_users.server_epoch : "-",
+			snapshot->revision,
+			s_users.revision,
 			(unsigned)snapshot->count);
 		ws_room_cache_give();
 		return ESP_ERR_INVALID_STATE;
 	}
 
 	memset(&s_users, 0, sizeof(s_users));
+	ws_room_cache_copy_text(s_users.server_epoch, sizeof(s_users.server_epoch), snapshot->server_epoch);
 	s_users.revision = snapshot->revision;
 	s_users.truncated = snapshot->truncated;
 	ws_room_cache_copy_text(s_users.room, sizeof(s_users.room), snapshot->room);
@@ -136,9 +160,10 @@ esp_err_t ws_room_cache_update_users(const ws_room_users_snapshot_t *snapshot)
 		s_users.users[i].callsign[ROOM_USER_CALLSIGN_MAX_LEN] = '\0';
 		s_users.users[i].fw_version[ROOM_USER_FW_VERSION_MAX_LEN] = '\0';
 	}
-	LOG("ws room cache updated users: room=%s revision=%u count=%u truncated=%d",
+	LOG("ws room cache updated users: room=%s epoch=%s revision=%" PRIu64 " count=%u truncated=%d",
 		s_users.room,
-		(unsigned)s_users.revision,
+		s_users.server_epoch[0] != '\0' ? s_users.server_epoch : "-",
+		s_users.revision,
 		(unsigned)s_users.count,
 		(int)s_users.truncated);
 
@@ -166,22 +191,22 @@ size_t ws_room_cache_user_count(void)
 	return count;
 }
 
-uint32_t ws_room_cache_room_revision(void)
+uint64_t ws_room_cache_room_revision(void)
 {
 	if(!ws_room_cache_take()) {
 		return 0;
 	}
-	uint32_t revision = s_rooms.revision;
+	uint64_t revision = s_rooms.revision;
 	ws_room_cache_give();
 	return revision;
 }
 
-uint32_t ws_room_cache_user_revision(void)
+uint64_t ws_room_cache_user_revision(void)
 {
 	if(!ws_room_cache_take()) {
 		return 0;
 	}
-	uint32_t revision = s_users.revision;
+	uint64_t revision = s_users.revision;
 	ws_room_cache_give();
 	return revision;
 }

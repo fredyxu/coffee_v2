@@ -1,4 +1,5 @@
 #include "page_talk.h"
+#include <inttypes.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -453,9 +454,9 @@ static void update_room_list() {
 	return;
 #else
 	size_t room_count = ws_room_cache_room_count();
-	LOG("talk page update room list: count=%u revision=%u truncated=%d current=%s",
+	LOG("talk page update room list: count=%u revision=%" PRIu64 " truncated=%d current=%s",
 		(unsigned)room_count,
-		(unsigned)ws_room_cache_room_revision(),
+		ws_room_cache_room_revision(),
 		(int)ws_room_cache_rooms_truncated(),
 		s_current_room_id);
 	if(room_count > ROOM_LIST_MAX_COUNT) {
@@ -527,10 +528,10 @@ static void update_user_list() {
 	char users_room[ROOM_ID_MAX_LEN + 1] = {0};
 	if(ws_room_cache_current_users_room(users_room, sizeof(users_room)) &&
 	   users_room[0] != '\0' && strcmp(users_room, s_current_room_id) != 0) {
-		LOG("talk page user list waiting: users_room=%s current_room=%s user_revision=%u",
+		LOG("talk page user list waiting: users_room=%s current_room=%s user_revision=%" PRIu64,
 			users_room,
 			s_current_room_id,
-			(unsigned)ws_room_cache_user_revision());
+			ws_room_cache_user_revision());
 		lv_obj_t *item = lv_obj_create(obj_user_list);
 		lv_obj_add_style(item, &s_style_item_body, LV_STATE_DEFAULT);
 		lv_obj_t *title_label = lv_label_create(item);
@@ -540,10 +541,10 @@ static void update_user_list() {
 	}
 
 	size_t user_count = ws_room_cache_user_count();
-	LOG("talk page update user list: room=%s count=%u revision=%u truncated=%d",
+	LOG("talk page update user list: room=%s count=%u revision=%" PRIu64 " truncated=%d",
 		users_room[0] != '\0' ? users_room : "-",
 		(unsigned)user_count,
-		(unsigned)ws_room_cache_user_revision(),
+		ws_room_cache_user_revision(),
 		(int)ws_room_cache_users_truncated());
 	if(user_count > ROOM_USERS_MAX_COUNT) {
 		user_count = ROOM_USERS_MAX_COUNT;
@@ -928,28 +929,20 @@ static void page_talk_msg_handler(const msg_t *msg)
 
 		case MSG_EVT_SYS_WS_ROOM_LIST_UPDATED:
 #if INTERCOM_ROOM_SYNC_ENABLE
-			if(page_talk_audio_active()) {
-				s_room_refresh_deferred = true;
-				break;
-			}
-			LOG("talk page room list updated event: revision=%d", msg->data.value);
+			LOG("talk page room list updated event");
 			room_init_default();
 			update_room_list();
 #else
-			LOG("talk page room list update ignored: room sync disabled revision=%d", msg->data.value);
+			LOG("talk page room list update ignored: room sync disabled");
 #endif
 			break;
 
 		case MSG_EVT_SYS_WS_ROOM_USERS_UPDATED:
 #if INTERCOM_ROOM_SYNC_ENABLE
-			if(page_talk_audio_active()) {
-				s_user_refresh_deferred = true;
-				break;
-			}
-			LOG("talk page room users updated event: revision=%d", msg->data.value);
+			LOG("talk page room users updated event");
 			update_user_list();
 #else
-			LOG("talk page room users update ignored: room sync disabled revision=%d", msg->data.value);
+			LOG("talk page room users update ignored: room sync disabled");
 #endif
 			break;
 

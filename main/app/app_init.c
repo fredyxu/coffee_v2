@@ -3,6 +3,7 @@
 #include "app/app_settings.h"
 #include "config/config_sys_audio.h"
 #include "core/utils/log.h"
+#include "driver/gpio.h"
 #include "esp_err.h"
 #include "core/msg/msg.h"
 #include "core/state/state.h"
@@ -33,6 +34,15 @@ static void app_init_report_done(void)
 	(void)msg_send_sys_value(MSG_SRC_APP_INIT, MSG_EVT_SYS_APP_INIT_DONE, 1, 0);
 }
 
+static esp_err_t app_gpio_isr_service_init(void)
+{
+	esp_err_t err = gpio_install_isr_service(0);
+	if(err == ESP_ERR_INVALID_STATE) {
+		return ESP_OK;
+	}
+	return err;
+}
+
 esp_err_t app_startup(void) {
 	// 初始化state
 	esp_err_t err = state_init();
@@ -45,6 +55,13 @@ esp_err_t app_startup(void) {
 	err = app_settings_init();
 	if(err != ESP_OK) {
 		LOG("APP_INIT: app settings init failed");
+		return err;
+	}
+
+	// GPIO ISR service must be installed before LCD/LVGL/WiFi allocate more interrupts.
+	err = app_gpio_isr_service_init();
+	if(err != ESP_OK) {
+		LOG("APP_INIT: GPIO ISR service init failed: %s", esp_err_to_name(err));
 		return err;
 	}
 
@@ -89,6 +106,14 @@ esp_err_t app_startup(void) {
 	}
 	app_init_report_info("UI初始化完成.");
 
+	// 初始化旋转编码器
+	err = encoder_actor_init();
+	if(err != ESP_OK) {
+		LOG("APP_INIT: encoder actor init failed");
+		return err;
+	}
+	app_init_report_info("旋转编码器初始化完成.");
+
 	// 初始化WiFi Actor
 	err = wifi_actor_init();
 	if(err != ESP_OK) {
@@ -113,13 +138,6 @@ esp_err_t app_startup(void) {
 	}
 	app_init_report_info("对讲初始化完成.");
 
-	// 初始化旋转编码器
-	err = encoder_actor_init();
-	if(err != ESP_OK) {
-		LOG("APP_INIT: encoder actor init failed");
-		return err;
-	}
-	app_init_report_info("旋转编码器初始化完成.");
 	// 初始化音频
 	err = audio_actor_init();
 	if(err != ESP_OK) {

@@ -7,6 +7,8 @@
 #include "config/config_room.h"
 #include "esp_err.h"
 
+#define WS_SERVER_EPOCH_MAX_LEN 40
+
 typedef struct {
 	char id[ROOM_ID_MAX_LEN + 1];
 	char name[ROOM_NAME_MAX_LEN + 1];
@@ -15,7 +17,8 @@ typedef struct {
 } ws_room_record_t;
 
 typedef struct {
-	uint32_t revision;
+	char server_epoch[WS_SERVER_EPOCH_MAX_LEN + 1];
+	uint64_t revision;
 	char server_time[ROOM_SERVER_TIME_MAX_LEN + 1];
 	bool truncated;
 	size_t count;
@@ -31,7 +34,8 @@ typedef struct {
 
 typedef struct {
 	char room[ROOM_ID_MAX_LEN + 1];
-	uint32_t revision;
+	char server_epoch[WS_SERVER_EPOCH_MAX_LEN + 1];
+	uint64_t revision;
 	char server_time[ROOM_SERVER_TIME_MAX_LEN + 1];
 	bool truncated;
 	size_t count;
@@ -43,8 +47,8 @@ esp_err_t ws_room_cache_update_users(const ws_room_users_snapshot_t *snapshot);
 
 size_t ws_room_cache_room_count(void);
 size_t ws_room_cache_user_count(void);
-uint32_t ws_room_cache_room_revision(void);
-uint32_t ws_room_cache_user_revision(void);
+uint64_t ws_room_cache_room_revision(void);
+uint64_t ws_room_cache_user_revision(void);
 bool ws_room_cache_rooms_truncated(void);
 bool ws_room_cache_users_truncated(void);
 

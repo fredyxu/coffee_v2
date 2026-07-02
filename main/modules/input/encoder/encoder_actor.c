@@ -191,12 +191,6 @@ esp_err_t encoder_actor_init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    err = gpio_install_isr_service(0);
-    if(err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-        LOG("gpio_install_isr_service failed: %s", esp_err_to_name(err));
-        goto fail;
-    }
-
     err = gpio_set_intr_type(s_ctx.pin_a, GPIO_INTR_ANYEDGE);
     if(err != ESP_OK) goto fail;
     err = gpio_set_intr_type(s_ctx.pin_b, GPIO_INTR_ANYEDGE);
